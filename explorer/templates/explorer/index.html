@@ -1,0 +1,133 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nitro Research Explorer</title>
+  <link rel="stylesheet" href="{% static 'explorer/app.css' %}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+<header class="topbar">
+  <h1>Nitro Research Explorer</h1>
+  <p class="subtitle">Streamflow &middot; NO3+NO2 &middot; Dissolved Oxygen &mdash; medians &amp; mutual information across USGS sites</p>
+</header>
+
+<div class="layout">
+  <!-- ============ FILTER SIDEBAR ============ -->
+  <aside class="sidebar">
+    <form id="filter-form">
+      <section class="fieldset">
+        <h2>Time window
+          <span class="badge {% if mode.recompute_enabled %}badge-ok{% else %}badge-off{% endif %}">
+            {% if mode.recompute_enabled %}recompute on{% else %}recompute off{% endif %}
+          </span>
+        </h2>
+        <p class="hint">Date / season filters re-derive medians &amp; MI from daily data.</p>
+        <div class="row two">
+          <label>Start date {{ form.start_date }}</label>
+          <label>End date {{ form.end_date }}</label>
+        </div>
+        <div class="row two">
+          <label>Season {{ form.season }}</label>
+          <label>Month {{ form.month }}</label>
+        </div>
+        <label>Min paired days for MI {{ form.min_paired_days }}</label>
+      </section>
+
+      <section class="fieldset">
+        <h2>Location</h2>
+        <label>Region</label>
+        <div class="checks">{{ form.regions }}</div>
+        <label>HUC2 region {{ form.huc2 }}</label>
+        <label>Site search (number or name) {{ form.site_query }}</label>
+      </section>
+
+      <section class="fieldset">
+        <h2>Value &amp; MI ranges</h2>
+        {% for r in range_rows %}
+          <div class="range-row">
+            <span class="range-label">{{ r.label }}</span>
+            <span class="range-inputs">{{ r.min }}<em>to</em>{{ r.max }}</span>
+          </div>
+        {% endfor %}
+        <h3>Minimum observation counts</h3>
+        {% for r in count_rows %}
+          <div class="range-row">
+            <span class="range-label">{{ r.label }}</span>
+            <span class="range-inputs">{{ r.min }}<em>min</em></span>
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="fieldset">
+        <h2>Charts</h2>
+        <label>Map color {{ form.map_color }}</label>
+        <label>Scatter presets</label>
+        <div class="presets">
+          <button type="button" class="preset" data-x="median_00060_Mean" data-y="mutual_information_flow_no3" data-logx="1" data-logy="0">log E(Q) vs MI</button>
+          <button type="button" class="preset" data-x="median_no3no2" data-y="median_do_mg_l" data-logx="0" data-logy="0">NO3+NO2 vs DO</button>
+          <button type="button" class="preset" data-x="median_00060_Mean" data-y="median_no3no2" data-logx="1" data-logy="1">E(Q) vs E(C)</button>
+        </div>
+        <div class="row two">
+          <label>X axis {{ form.scatter_x }}</label>
+          <label>Y axis {{ form.scatter_y }}</label>
+        </div>
+        <div class="row two">
+          <label class="inline">{{ form.log_x }} log X</label>
+          <label class="inline">{{ form.log_y }} log Y</label>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button type="submit" class="primary">Apply filters</button>
+        <button type="reset" class="secondary" id="reset-btn">Reset</button>
+      </div>
+    </form>
+  </aside>
+
+  <!-- ============ RESULTS ============ -->
+  <main class="results">
+    <div id="banner" class="banner" hidden></div>
+    <div id="status" class="status">Loading&hellip;</div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Map</h2>
+        <a id="dl-map" class="dl" href="#">Download PNG</a>
+      </div>
+      <div id="map-div" class="plot"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Scatter</h2>
+        <a id="dl-scatter" class="dl" href="#">Download PNG</a>
+      </div>
+      <div id="scatter-div" class="plot"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Sites <span id="row-count" class="muted"></span></h2>
+        <a id="dl-csv" class="dl" href="#">Download CSV</a>
+      </div>
+      <div class="table-wrap">
+        <table id="results-table"><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  window.EXPLORER_URLS = {
+    results: "{% url 'explorer:results' %}",
+    csv: "{% url 'explorer:download_csv' %}",
+    mapPng: "{% url 'explorer:download_png' 'map' %}",
+    scatterPng: "{% url 'explorer:download_png' 'scatter' %}",
+  };
+</script>
+<script src="{% static 'explorer/app.js' %}"></script>
+</body>
+</html>

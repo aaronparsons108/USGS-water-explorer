@@ -1,6 +1,27 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# --- nitro-research data locations -----------------------------------------
+# Committed small summary CSVs (site metadata + offline fallback). Lives in-repo.
+DATA_DIR = BASE_DIR / "data"
+
+# Parsed daily-value caches (Parquet). Rebuilt with: python manage.py build_cache
+CACHE_DIR = Path(os.environ.get("NITRO_CACHE_DIR", BASE_DIR / ".cache"))
+
+# Root of the research1 repo that holds the raw 436 MB sitedata/ and
+# pmcodesites/. Needed only to (re)build the cache and to recompute medians/MI
+# over custom date ranges/seasons. Override with the NITRO_DATA_ROOT env var.
+NITRO_DATA_ROOT = Path(
+    os.environ.get("NITRO_DATA_ROOT", BASE_DIR.parent / "nitro-research")
+)
+SITEDATA_DIR = NITRO_DATA_ROOT / "sitedata"
+
+# Study window used by research1 (heatmap_common). The date-range filter may
+# request any sub-window of this; values outside are simply absent from data.
+DATE_START = "2008-01-01"
+DATE_END = "2026-02-26"
 
 SECRET_KEY = 'django-insecure-temporary-key-for-local-hydrology-dev'
 DEBUG = True
@@ -13,6 +34,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'landing_page',
+    'explorer',
 ]
 
 MIDDLEWARE = [

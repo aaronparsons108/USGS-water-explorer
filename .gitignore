@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+
+# Parsed daily-value caches (rebuild with: python manage.py build_cache)
+.cache/
+
+# Raw research1 data must never be committed here (436 MB). If a copy is ever
+# placed inside this repo, keep it out of git:
+sitedata/
+pmcodesites/
+
+# Editor / tooling / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.claude/
+
+# Plotly/kaleido scratch
+*.png.tmp
