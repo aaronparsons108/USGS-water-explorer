@@ -62,7 +62,8 @@ def results(request):
 
     map_fig = figures.map_figure(table, color_col=fk["map_color"])
     scatter_fig = figures.scatter_figure(
-        table, fk["scatter_x"], fk["scatter_y"], log_x=fk["log_x"], log_y=fk["log_y"]
+        table, fk["scatter_x"], fk["scatter_y"],
+        log_x=fk["log_x"], log_y=fk["log_y"], color_col=fk["scatter_color"],
     )
 
     rows = json.loads(table.to_json(orient="records"))
@@ -91,7 +92,8 @@ def download_png(request, kind: str):
         fname = "nitro_map.png"
     elif kind == "scatter":
         fig = figures.scatter_figure(
-            table, fk["scatter_x"], fk["scatter_y"], log_x=fk["log_x"], log_y=fk["log_y"]
+            table, fk["scatter_x"], fk["scatter_y"],
+            log_x=fk["log_x"], log_y=fk["log_y"], color_col=fk["scatter_color"],
         )
         fname = "nitro_scatter.png"
     else:

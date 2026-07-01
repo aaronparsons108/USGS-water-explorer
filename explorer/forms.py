@@ -64,6 +64,9 @@ class FilterForm(forms.Form):
     )
     log_x = forms.BooleanField(required=False, initial=True)
     log_y = forms.BooleanField(required=False, initial=False)
+    scatter_color = forms.ChoiceField(
+        required=False, choices=MAP_COLOR_CHOICES, initial="location_type"
+    )
     map_color = forms.ChoiceField(required=False, choices=MAP_COLOR_CHOICES, initial="location_type")
 
     def __init__(self, *args, **kwargs):
@@ -131,5 +134,6 @@ class FilterForm(forms.Form):
             "scatter_y": cd.get("scatter_y") or "mutual_information_flow_no3",
             "log_x": bool(cd.get("log_x")),
             "log_y": bool(cd.get("log_y")),
+            "scatter_color": cd.get("scatter_color") or "location_type",
             "map_color": cd.get("map_color") or "location_type",
         }

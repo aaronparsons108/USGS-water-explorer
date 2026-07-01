@@ -48,6 +48,26 @@ def _hover_data(df: pd.DataFrame) -> dict:
     return cols
 
 
+# Clip continuous color scales to this percentile window (matches research1's
+# bubble maps) so a few extreme sites don't wash out the rest of the gradient.
+COLOR_PCT_LO, COLOR_PCT_HI = 5, 95
+
+
+def _robust_range(values, lo: int = COLOR_PCT_LO, hi: int = COLOR_PCT_HI):
+    """Return [p_lo, p_hi] for a continuous color scale, falling back to min/max."""
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        return None
+    a = float(np.nanpercentile(v, lo))
+    b = float(np.nanpercentile(v, hi))
+    if not (np.isfinite(a) and np.isfinite(b)) or b <= a:
+        a, b = float(v.min()), float(v.max())
+        if b <= a:
+            b = a + 1e-9
+    return [a, b]
+
+
 def map_figure(df: pd.DataFrame, color_col: str = "location_type") -> go.Figure:
     """CONUS bubble map. Color by region (discrete) or any metric (continuous)."""
     if df is None or df.empty:
@@ -81,6 +101,7 @@ def map_figure(df: pd.DataFrame, color_col: str = "location_type") -> go.Figure:
             plot,
             color=color_col,
             color_continuous_scale="Viridis",
+            range_color=_robust_range(plot[color_col]),
             **common,
         )
         fig.update_coloraxes(colorbar_title_text=label(color_col))
@@ -124,25 +145,43 @@ def scatter_figure(
     if plot.empty:
         return _empty("No sites have values for both axes (after log filtering).")
 
-    fig = px.scatter(
-        plot,
+    common = dict(
         x=x_col,
         y=y_col,
-        color=color_col if color_col in plot.columns else None,
-        category_orders={"location_type": list(REGION_ORDER)},
-        color_discrete_map=REGION_COLORS,
         hover_name="station_nm",
         hover_data=_hover_data(plot),
         log_x=log_x,
         log_y=log_y,
     )
+
+    if color_col == "location_type" or color_col not in plot.columns:
+        fig = px.scatter(
+            plot,
+            color="location_type" if "location_type" in plot.columns else None,
+            category_orders={"location_type": list(REGION_ORDER)},
+            color_discrete_map=REGION_COLORS,
+            **common,
+        )
+        fig.update_layout(legend_title_text="Region")
+    else:
+        cplot = plot.dropna(subset=[color_col])
+        if cplot.empty:
+            return _empty(f"No sites have a value for {label(color_col)}.")
+        fig = px.scatter(
+            cplot,
+            color=color_col,
+            color_continuous_scale="Viridis",
+            range_color=_robust_range(cplot[color_col]),
+            **common,
+        )
+        fig.update_coloraxes(colorbar_title_text=label(color_col))
+
     fig.update_traces(marker=dict(size=9, line=dict(width=0.5, color="black")))
     fig.update_layout(
         margin=dict(l=60, r=20, t=50, b=50),
         xaxis_title=("log " if log_x else "") + label(x_col),
         yaxis_title=("log " if log_y else "") + label(y_col),
         title=f"{label(y_col)} vs {label(x_col)}",
-        legend_title_text="Region",
     )
     return fig
 

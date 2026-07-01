@@ -63,7 +63,10 @@
 
       <section class="fieldset">
         <h2>Charts</h2>
-        <label>Map color {{ form.map_color }}</label>
+        <div class="row two">
+          <label>Map color {{ form.map_color }}</label>
+          <label>Scatter color {{ form.scatter_color }}</label>
+        </div>
         <label>Scatter presets</label>
         <div class="presets">
           <button type="button" class="preset" data-x="median_00060_Mean" data-y="mutual_information_flow_no3" data-logx="1" data-logy="0">log E(Q) vs MI</button>
