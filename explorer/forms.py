@@ -1,31 +1,12 @@
-"""The filter form: dates, season/month, location, value/MI ranges, and the
-scatter axis / map color selectors."""
+"""The explorer filter form, built dynamically from a dataset's metric schema."""
 
 from __future__ import annotations
 
 from django import forms
 
-from .core.metadata import load_site_metadata
+from .core.metadata import load_dataset_metadata
 from .core.seasons import CALENDAR_MONTHS
 from .core.regions import REGION_ORDER
-from .core.service import METRIC_LABELS, NUMERIC_COLUMNS
-
-# Metrics that get a (min, max) range pair.
-RANGE_METRICS = [
-    "median_00060_Mean",
-    "median_no3no2",
-    "median_do_mg_l",
-    "mutual_information_flow_no3",
-    "mutual_information_no3_do",
-]
-# Observation-count columns that get a min-only threshold.
-COUNT_COLS = [
-    "n_flow_obs",
-    "n_combined_days",
-    "n_do_days",
-    "n_paired_days_flow_no3",
-    "n_paired_days_no3_do",
-]
 
 SEASON_CHOICES = [
     ("", "(any season)"),
@@ -36,10 +17,6 @@ SEASON_CHOICES = [
 ]
 MONTH_CHOICES = [("", "(any month)")] + [(slug, slug.title()) for slug, _ in CALENDAR_MONTHS]
 REGION_CHOICES = [(r, r) for r in REGION_ORDER]
-AXIS_CHOICES = [(c, METRIC_LABELS.get(c, c)) for c in NUMERIC_COLUMNS]
-MAP_COLOR_CHOICES = [("location_type", "Region")] + [
-    (c, METRIC_LABELS[c]) for c in RANGE_METRICS
-]
 
 
 class FilterForm(forms.Form):
@@ -54,25 +31,56 @@ class FilterForm(forms.Form):
     regions = forms.MultipleChoiceField(
         required=False, choices=REGION_CHOICES, widget=forms.CheckboxSelectMultiple
     )
-    huc2 = forms.MultipleChoiceField(required=False, choices=[])  # populated in __init__
+    huc2 = forms.MultipleChoiceField(required=False, choices=[])
     site_query = forms.CharField(required=False, max_length=120)
 
-    # --- visualization controls ---
-    scatter_x = forms.ChoiceField(required=False, choices=AXIS_CHOICES, initial="median_00060_Mean")
-    scatter_y = forms.ChoiceField(
-        required=False, choices=AXIS_CHOICES, initial="mutual_information_flow_no3"
-    )
+    # --- visualization controls (choices filled per dataset) ---
+    scatter_x = forms.ChoiceField(required=False, choices=[])
+    scatter_y = forms.ChoiceField(required=False, choices=[])
     log_x = forms.BooleanField(required=False, initial=True)
     log_y = forms.BooleanField(required=False, initial=False)
-    scatter_color = forms.ChoiceField(
-        required=False, choices=MAP_COLOR_CHOICES, initial="location_type"
-    )
-    map_color = forms.ChoiceField(required=False, choices=MAP_COLOR_CHOICES, initial="location_type")
+    scatter_color = forms.ChoiceField(required=False, choices=[])
+    map_color = forms.ChoiceField(required=False, choices=[])
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dataset, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # HUC2 choices come from whatever metadata is available.
-        meta = load_site_metadata()
+        self.dataset = dataset
+        self.schema = dataset.metric_schema()
+        labels = self.schema["labels"]
+
+        # Value/MI range metrics + count thresholds from the schema.
+        self.range_metrics = self.schema["medians"] + self.schema["mis"]
+        self.count_cols = [
+            c for c in self.schema["numeric"] if c.startswith(("n_g", "n_paired_"))
+        ]
+        for col in self.range_metrics:
+            self.fields[f"{col}__min"] = forms.FloatField(required=False)
+            self.fields[f"{col}__max"] = forms.FloatField(required=False)
+        for col in self.count_cols:
+            self.fields[f"{col}__min"] = forms.IntegerField(required=False, min_value=0)
+
+        axis_choices = [(c, labels.get(c, c)) for c in self.schema["numeric"]]
+        color_choices = [("location_type", "Region")] + [
+            (c, labels.get(c, c)) for c in self.range_metrics
+        ]
+        self.fields["scatter_x"].choices = axis_choices
+        self.fields["scatter_y"].choices = axis_choices
+        self.fields["scatter_color"].choices = color_choices
+        self.fields["map_color"].choices = color_choices
+
+        self._default_x = self.schema["medians"][0] if self.schema["medians"] else ""
+        self._default_y = (
+            self.schema["mis"][0]
+            if self.schema["mis"]
+            else (self.schema["medians"][-1] if self.schema["medians"] else "")
+        )
+        self.fields["scatter_x"].initial = self._default_x
+        self.fields["scatter_y"].initial = self._default_y
+        self.fields["scatter_color"].initial = "location_type"
+        self.fields["map_color"].initial = "location_type"
+
+        # HUC2 choices from whatever metadata this dataset has.
+        meta = load_dataset_metadata(dataset)
         huc_vals = (
             sorted(
                 {
@@ -84,30 +92,25 @@ class FilterForm(forms.Form):
             if "huc2" in meta.columns
             else []
         )
-        name_map = {}
+        name_map: dict[str, str] = {}
         if "huc2_region_name" in meta.columns:
             for _, r in meta.dropna(subset=["huc2"]).iterrows():
-                name_map.setdefault(str(r["huc2"]), str(r.get("huc2_region_name") or ""))
+                nm = r.get("huc2_region_name")
+                if nm is not None and str(nm) not in ("nan", "<NA>"):
+                    name_map.setdefault(str(r["huc2"]), str(nm))
         self.fields["huc2"].choices = [
-            (h, f"{h} - {name_map.get(h)}" if name_map.get(h) else h) for h in huc_vals
+            (h, f"{h} - {name_map[h]}" if name_map.get(h) else h) for h in huc_vals
         ]
 
-        # Range fields, added dynamically so the template can iterate them.
-        for col in RANGE_METRICS:
-            self.fields[f"{col}__min"] = forms.FloatField(required=False)
-            self.fields[f"{col}__max"] = forms.FloatField(required=False)
-        for col in COUNT_COLS:
-            self.fields[f"{col}__min"] = forms.IntegerField(required=False, min_value=0)
-
-    # --- accessors the view uses to build service / figure kwargs ---
+    # --- accessors the views use ---
     def ranges(self) -> dict:
         cd = self.cleaned_data
         out: dict[str, tuple] = {}
-        for col in RANGE_METRICS:
+        for col in self.range_metrics:
             lo, hi = cd.get(f"{col}__min"), cd.get(f"{col}__max")
             if lo is not None or hi is not None:
                 out[col] = (lo, hi)
-        for col in COUNT_COLS:
+        for col in self.count_cols:
             lo = cd.get(f"{col}__min")
             if lo is not None:
                 out[col] = (lo, None)
@@ -130,8 +133,8 @@ class FilterForm(forms.Form):
     def figure_kwargs(self) -> dict:
         cd = self.cleaned_data
         return {
-            "scatter_x": cd.get("scatter_x") or "median_00060_Mean",
-            "scatter_y": cd.get("scatter_y") or "mutual_information_flow_no3",
+            "scatter_x": cd.get("scatter_x") or self._default_x,
+            "scatter_y": cd.get("scatter_y") or self._default_y,
             "log_x": bool(cd.get("log_x")),
             "log_y": bool(cd.get("log_y")),
             "scatter_color": cd.get("scatter_color") or "location_type",

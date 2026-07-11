@@ -17,6 +17,9 @@ db.sqlite3-journal
 # Parsed daily-value caches (rebuild with: python manage.py build_cache)
 .cache/
 
+# Per-dataset downloads + daily tables (user data; recreate via the wizard)
+datasets_store/
+
 # Raw research1 data must never be committed here (436 MB). If a copy is ever
 # placed inside this repo, keep it out of git:
 sitedata/

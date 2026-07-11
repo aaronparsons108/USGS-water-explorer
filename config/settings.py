@@ -10,6 +10,9 @@ DATA_DIR = BASE_DIR / "data"
 # Parsed daily-value caches (Parquet). Rebuilt with: python manage.py build_cache
 CACHE_DIR = Path(os.environ.get("NITRO_CACHE_DIR", BASE_DIR / ".cache"))
 
+# Per-dataset storage (raw downloads + daily parquet tables). Gitignored.
+DATASETS_STORE_DIR = Path(os.environ.get("NITRO_DATASETS_DIR", BASE_DIR / "datasets_store"))
+
 # Root of the research1 repo that holds the raw 436 MB sitedata/ and
 # pmcodesites/. Needed only to (re)build the cache and to recompute medians/MI
 # over custom date ranges/seasons. Override with the NITRO_DATA_ROOT env var.
@@ -35,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'landing_page',
     'explorer',
+    'datasets',
 ]
 
 MIDDLEWARE = [

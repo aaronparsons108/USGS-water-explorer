@@ -14,19 +14,22 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from .regions import REGION_COLORS, REGION_ORDER
-from .service import METRIC_LABELS
 
-HOVER_METRICS = [
-    "median_00060_Mean",
-    "median_no3no2",
-    "median_do_mg_l",
-    "mutual_information_flow_no3",
-    "mutual_information_no3_do",
-]
+# Module-level label/hover config, set per-request by set_schema(). Keeping the
+# figure signatures small while labels vary by dataset.
+_LABELS: dict[str, str] = {}
+_HOVER: list[str] = []
+
+
+def set_schema(labels: dict[str, str], hover_cols: list[str]) -> None:
+    """Configure metric labels + hover columns for subsequent figure calls."""
+    global _LABELS, _HOVER
+    _LABELS = dict(labels)
+    _HOVER = list(hover_cols)
 
 
 def label(col: str) -> str:
-    return METRIC_LABELS.get(col, col)
+    return _LABELS.get(col, col)
 
 
 def _empty(message: str) -> go.Figure:
@@ -42,7 +45,7 @@ def _empty(message: str) -> go.Figure:
 
 def _hover_data(df: pd.DataFrame) -> dict:
     cols = {"site_no": True, "location_type": True}
-    for c in HOVER_METRICS:
+    for c in _HOVER:
         if c in df.columns:
             cols[c] = ":.4g"
     return cols

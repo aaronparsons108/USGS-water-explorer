@@ -107,41 +107,65 @@ def _mi_from_paired(
     return pd.DataFrame(rows)
 
 
-def compute_site_metrics(
-    daily_flow: pd.DataFrame,
-    daily_no3: pd.DataFrame,
-    daily_do: pd.DataFrame,
+def compute_group_metrics(
+    daily_by_pos: dict[int, pd.DataFrame],
     *,
+    pairing_gates: dict[str, int] | None = None,
     start=None,
     end=None,
     months=None,
     min_paired_days: int = DEFAULT_MIN_PAIRED_DAYS,
 ) -> pd.DataFrame:
-    """Per-site medians + MI over a date/month slice. Index-free, keyed on site_no."""
-    f = _slice(daily_flow, start, end, months)
-    c = _slice(daily_no3, start, end, months)
-    d = _slice(daily_do, start, end, months)
+    """Generalized per-site metrics for N parameter groups.
 
-    flow_stats = _median_count(f, "flow", MEDIAN_FLOW_COL, "n_flow_obs")
-    no3_stats = _median_count(c, "no3_combined", MEDIAN_NO3_COL, "n_combined_days")
-    do_stats = _median_count(d, "do_mg_l", MEDIAN_DO_COL, "n_do_days")
+    ``daily_by_pos`` maps group position -> daily table (site_no, datetime, value).
+    Output columns: median_g<pos>, n_g<pos> per group; mi_g<i>_g<j>,
+    n_paired_g<i>_g<j> for every pair (i < j).
 
-    # MI(flow, NO3+NO2): days with both flow and combined NO3+NO2.
-    paired_fn = _paired(f, c, ["flow", "no3_combined"])
-    mi_fn = _mi_from_paired(
-        paired_fn, "flow", "no3_combined",
-        MI_FLOW_NO3_COL, "n_paired_days_flow_no3", min_paired_days,
-    )
-    # MI(NO3+NO2, DO): research1 derives its NO3+NO2 series from the flow-paired
-    # daily table, so DO is matched only on days that also had flow.
-    no3_for_do = paired_fn[["site_no", "datetime", "no3_combined"]]
-    paired_nd = _paired(no3_for_do, d, ["no3_combined", "do_mg_l"])
-    mi_nd = _mi_from_paired(
-        paired_nd, "no3_combined", "do_mg_l",
-        MI_NO3_DO_COL, "n_paired_days_no3_do", min_paired_days,
-    )
+    ``pairing_gates`` maps "i,j" to a rule dict (an int is shorthand for
+    {"gate": int}): "gate" restricts group i's days to those also paired with
+    the gate group before pairing with j (research1 paired DO against the
+    flow-gated NO3 series); "x" picks which group's series is passed as the
+    estimator's X (sklearn's kNN MI is not numerically symmetric — research1
+    used flow as X for the flow/NO3 pair). New datasets use no rules.
+    """
+    from itertools import combinations
 
-    out = flow_stats
-    for part in (no3_stats, do_stats, mi_fn, mi_nd):
-        out = out.merge(part, on="site_no", how="outer")
-    return out
+    positions = sorted(daily_by_pos)
+    sliced = {pos: _slice(daily_by_pos[pos], start, end, months) for pos in positions}
+    gates = pairing_gates or {}
+
+    out: pd.DataFrame | None = None
+    for pos in positions:
+        stats = _median_count(sliced[pos], "value", f"median_g{pos}", f"n_g{pos}")
+        out = stats if out is None else out.merge(stats, on="site_no", how="outer")
+
+    def renamed(pos: int) -> pd.DataFrame:
+        df = sliced[pos]
+        if df is None or df.empty:
+            return pd.DataFrame(columns=["site_no", "datetime", f"v{pos}"])
+        return df.rename(columns={"value": f"v{pos}"})
+
+    for i, j in combinations(positions, 2):
+        rule = gates.get(f"{i},{j}")
+        if isinstance(rule, int):  # legacy shorthand
+            rule = {"gate": rule}
+        rule = rule or {}
+        gate = rule.get("gate")
+        x_pos = rule.get("x", i)
+        y_pos = j if x_pos == i else i
+
+        left = renamed(i)
+        if gate is not None and gate in sliced:
+            gated = _paired(left, renamed(gate), [f"v{i}", f"v{gate}"])
+            left = gated[["site_no", "datetime", f"v{i}"]] if not gated.empty else left.iloc[0:0]
+        pr = _paired(left, renamed(j), [f"v{i}", f"v{j}"])
+        mi = _mi_from_paired(
+            pr, f"v{x_pos}", f"v{y_pos}", f"mi_g{i}_g{j}", f"n_paired_g{i}_g{j}", min_paired_days
+        )
+        if out is None:
+            out = mi
+        else:
+            out = out.merge(mi, on="site_no", how="outer")
+
+    return out if out is not None else pd.DataFrame(columns=["site_no"])

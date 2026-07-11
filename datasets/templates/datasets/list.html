@@ -1,0 +1,57 @@
+{% extends "datasets/base.html" %}
+{% block title %}Datasets — USGS Site Explorer{% endblock %}
+
+{% block content %}
+<div class="sites-toolbar">
+  <h2 style="margin:0;font-size:17px;">Datasets</h2>
+  <div class="spacer"></div>
+  <form method="post" action="{% url 'datasets:create' %}">
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+    <button type="submit" class="btn primary">+ New extraction</button>
+  </form>
+</div>
+
+<div class="cards">
+  {% for c in cards %}
+  <div class="ds-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3>{{ c.name }}</h3>
+      <span class="status-pill status-{{ c.status }}">{{ c.status_label }}</span>
+    </div>
+    <div class="group-chips">
+      {% for g in c.groups %}<span class="chip">{{ g.label }} <span class="unit">{{ g.n_codes }} code{{ g.n_codes|pluralize }}</span></span>{% endfor %}
+    </div>
+    <div class="meta">
+      {{ c.n_selected }} of {{ c.n_sites }} sites selected &middot; created {{ c.created }}
+      {% if c.is_demo %}&middot; bundled demo{% endif %}
+    </div>
+    {% if c.error %}<div class="error-box">{{ c.error }}</div>{% endif %}
+    <div class="ds-actions">
+      {% if c.status == "ready" %}
+        <a class="btn primary" href="/explorer/{{ c.slug }}/">Explore</a>
+      {% endif %}
+      {% if not c.is_demo %}
+        {% if c.status == "draft" or c.status == "error" %}
+          <a class="btn" href="{% url 'datasets:setup' c.id %}">Set up</a>
+        {% elif c.status == "sites_ready" %}
+          <a class="btn" href="{% url 'datasets:sites' c.id %}">Pick sites</a>
+        {% elif c.status == "discovering" %}
+          <a class="btn" href="{% url 'datasets:sites' c.id %}">View progress</a>
+        {% elif c.status == "downloading" %}
+          <a class="btn" href="{% url 'datasets:download' c.id %}">View progress</a>
+        {% else %}
+          <a class="btn" href="{% url 'datasets:setup' c.id %}">Edit</a>
+        {% endif %}
+        <form method="post" action="{% url 'datasets:delete' c.id %}"
+              onsubmit="return confirm('Delete dataset “{{ c.name }}” and its downloaded data?');">
+          <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+          <button type="submit" class="btn danger">Delete</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <p class="note">No datasets yet — create one to start extracting USGS data.</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "datasets/base.html" %}
+{% load static %}
+{% block title %}Setup — {{ ds.name }}{% endblock %}
+
+{% block content %}
+<div class="steps">
+  <span class="step active">1 · Parameters &amp; scope</span>
+  <span class="step">2 · Discover sites</span>
+  <span class="step">3 · Download &amp; build</span>
+  <span class="step">4 · Explore</span>
+</div>
+
+<div class="panel">
+  <h2>Dataset</h2>
+  <div class="form-grid">
+    <label>Name <input type="text" id="ds-name"></label>
+    <label>Start date <input type="date" id="ds-start"></label>
+    <label>End date <input type="date" id="ds-end"></label>
+    <label>Min observations per series <input type="number" id="ds-mincount" min="1"></label>
+  </div>
+  <label class="inline" style="margin-top:6px;"><input type="checkbox" id="ds-wells"> Exclude wells (15-digit site numbers)</label>
+</div>
+
+<div class="panel">
+  <h2>Parameter groups <span class="note">— a site qualifies only if it has data in <strong>every</strong> group</span></h2>
+  <div class="sites-toolbar">
+    <button type="button" class="btn" id="load-example">Load example (nitrate research)</button>
+    <div class="spacer"></div>
+    <button type="button" class="btn" id="add-group">+ Add group</button>
+  </div>
+  <div id="groups"></div>
+  <p class="note">Search by parameter code (e.g. <code>00060</code>) or name (e.g. <code>nitrate</code>).
+     Units shown per code; within a group, values are normalized to the group's most common unit —
+     codes that can't be converted are excluded and reported.</p>
+</div>
+
+<div class="panel">
+  <h2>Data services (site must have a matching series)</h2>
+  <div id="services" class="checks"></div>
+  <p class="note">Only <strong>daily values (dv)</strong> are downloaded and analyzed; other services act as site filters.
+     (USGS retired the qw download endpoint in 2024.)</p>
+</div>
+
+<div class="panel">
+  <h2>States</h2>
+  <div class="sites-toolbar">
+    <button type="button" class="btn" id="states-conus">All CONUS</button>
+    <button type="button" class="btn" id="states-none">Clear</button>
+    <span class="note" id="states-count"></span>
+  </div>
+  <div id="states" class="state-grid"></div>
+</div>
+
+<div class="actions" style="display:flex;gap:8px;">
+  <button type="button" class="btn primary" id="save-btn">Save &amp; continue to site discovery →</button>
+  <a class="btn" href="{% url 'datasets:list' %}">Back to datasets</a>
+</div>
+
+{{ bootstrap|json_script:"bootstrap" }}
+{% endblock %}
+
+{% block scripts %}<script src="{% static 'datasets/setup.js' %}"></script>{% endblock %}

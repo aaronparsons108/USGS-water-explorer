@@ -4,14 +4,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nitro Research Explorer</title>
+  <title>{{ ds.name }} — USGS Site Explorer</title>
   <link rel="stylesheet" href="{% static 'explorer/app.css' %}">
+  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 </head>
 <body>
 <header class="topbar">
-  <h1>Nitro Research Explorer</h1>
-  <p class="subtitle">Streamflow &middot; NO3+NO2 &middot; Dissolved Oxygen &mdash; medians &amp; mutual information across USGS sites</p>
+  <div class="topbar-row">
+    <div>
+      <h1>{{ ds.name }}</h1>
+      <p class="subtitle">Per-site medians &amp; mutual information &mdash;
+        {% for g in ds.groups_ordered %}{{ g.label }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}</p>
+    </div>
+    <nav class="topnav">
+      <a href="/datasets/">Datasets</a>
+      {% if not ds.is_demo %}<a href="/datasets/{{ ds.id }}/download/">Extraction steps</a>{% endif %}
+    </nav>
+  </div>
 </header>
 
 <div class="layout">
@@ -67,12 +77,15 @@
           <label>Map color {{ form.map_color }}</label>
           <label>Scatter color {{ form.scatter_color }}</label>
         </div>
+        {% if presets %}
         <label>Scatter presets</label>
         <div class="presets">
-          <button type="button" class="preset" data-x="median_00060_Mean" data-y="mutual_information_flow_no3" data-logx="1" data-logy="0">log E(Q) vs MI</button>
-          <button type="button" class="preset" data-x="median_no3no2" data-y="median_do_mg_l" data-logx="0" data-logy="0">NO3+NO2 vs DO</button>
-          <button type="button" class="preset" data-x="median_00060_Mean" data-y="median_no3no2" data-logx="1" data-logy="1">E(Q) vs E(C)</button>
+          {% for p in presets %}
+          <button type="button" class="preset" data-x="{{ p.x }}" data-y="{{ p.y }}"
+                  data-logx="{{ p.logx }}" data-logy="{{ p.logy }}">{{ p.label }}</button>
+          {% endfor %}
         </div>
+        {% endif %}
         <div class="row two">
           <label>X axis {{ form.scatter_x }}</label>
           <label>Y axis {{ form.scatter_y }}</label>
@@ -125,10 +138,10 @@
 
 <script>
   window.EXPLORER_URLS = {
-    results: "{% url 'explorer:results' %}",
-    csv: "{% url 'explorer:download_csv' %}",
-    mapPng: "{% url 'explorer:download_png' 'map' %}",
-    scatterPng: "{% url 'explorer:download_png' 'scatter' %}",
+    results: "{% url 'explorer:results' ds.slug %}",
+    csv: "{% url 'explorer:download_csv' ds.slug %}",
+    mapPng: "{% url 'explorer:download_png' ds.slug 'map' %}",
+    scatterPng: "{% url 'explorer:download_png' ds.slug 'scatter' %}",
   };
 </script>
 <script src="{% static 'explorer/app.js' %}"></script>

@@ -24,6 +24,21 @@ from .metrics import (
     MI_NO3_DO_COL,
 )
 
+# Legacy research1 CSV columns -> generalized demo columns
+# (demo groups: g1 = NO3+NO2, g2 = Streamflow, g3 = Dissolved Oxygen).
+LEGACY_TO_GENERAL = {
+    MEDIAN_NO3_COL: "median_g1",
+    "n_combined_days": "n_g1",
+    MEDIAN_FLOW_COL: "median_g2",
+    "n_flow_obs": "n_g2",
+    MEDIAN_DO_COL: "median_g3",
+    "n_do_days": "n_g3",
+    MI_FLOW_NO3_COL: "mi_g1_g2",
+    "n_paired_days_flow_no3": "n_paired_g1_g2",
+    MI_NO3_DO_COL: "mi_g1_g3",
+    "n_paired_days_no3_do": "n_paired_g1_g3",
+}
+
 MERGED_CSV = "merged_site_data.csv"
 DO_MEDIAN_CSV = "site_median_do.csv"
 DO_MI_CSV = "sites_mutual_information_no3_do.csv"
@@ -94,8 +109,8 @@ def load_site_metadata() -> pd.DataFrame:
 def load_fallback_metrics() -> pd.DataFrame:
     """Full-window per-site metrics from the committed CSVs (used when no raw data).
 
-    Columns match ``metrics.compute_site_metrics`` output so downstream code is
-    identical on both paths.
+    Columns use the legacy research1 names; ``load_fallback_metrics_general``
+    renames them to the generalized median_g*/mi_g* scheme.
     """
     merged = _read_csv(MERGED_CSV)
     do_med = _read_csv(DO_MEDIAN_CSV)
@@ -139,6 +154,47 @@ def load_fallback_metrics() -> pd.DataFrame:
         out = out.merge(dmi, on="site_no", how="outer")
 
     return out
+
+
+def load_fallback_metrics_general() -> pd.DataFrame:
+    """Demo fallback metrics under the generalized median_g*/mi_g* column names."""
+    return load_fallback_metrics().rename(columns=LEGACY_TO_GENERAL)
+
+
+def load_dataset_metadata(dataset) -> pd.DataFrame:
+    """Per-site metadata for a dataset.
+
+    Demo -> legacy CSV loader (keeps huc2 names from the research1 export).
+    Extracted datasets -> CandidateSite rows; region from coords, HUC2 from the
+    inventory's huc_cd, region names from the static WBD table.
+    """
+    if dataset.is_demo:
+        return load_site_metadata()
+
+    from datasets.catalog import HUC2_REGION_NAMES
+
+    rows = []
+    for s in dataset.sites.filter(selected=True):
+        huc2 = s.huc2
+        rows.append(
+            {
+                "site_no": normalize_usgs_site_no(s.site_no),
+                "station_nm": s.station_nm,
+                "dec_lat_va": s.dec_lat_va,
+                "dec_long_va": s.dec_long_va,
+                "location_type": site_location_type_label(s.site_no, s.dec_lat_va, s.dec_long_va),
+                "huc2": huc2 or pd.NA,
+                "huc2_region_name": HUC2_REGION_NAMES.get(huc2, pd.NA) if huc2 else pd.NA,
+            }
+        )
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "site_no", "station_nm", "dec_lat_va", "dec_long_va",
+                "location_type", "huc2", "huc2_region_name",
+            ]
+        )
+    return pd.DataFrame(rows).drop_duplicates(subset=["site_no"]).reset_index(drop=True)
 
 
 def clear_caches() -> None:

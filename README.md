@@ -1,106 +1,81 @@
-# Nitro Research Explorer
+# USGS Site Explorer
 
-A Django web frontend for exploring USGS daily-value metrics — **median streamflow
-(00060)**, **median NO3+NO2 (mg/L as N)**, **median dissolved oxygen (00300)**, and the
-**mutual information** between (streamflow, NO3+NO2) and (NO3+NO2, dissolved oxygen) —
-across qualifying sites. Type filter values into a form, press **Apply filters**, and get
-a filtered data table plus an interactive CONUS bubble map and scatterplot. Every figure
-can be downloaded as a PNG and the table as CSV.
+A Django web app for **end-to-end USGS water-data research — no coding required**:
 
-This is the interactive companion to the script-based analysis in the sibling
-`nitro-research` repo; the metric logic here is a faithful port of that repo's
-`nitro` / `dissolved_oxygen` packages (see *Parity* below).
+1. **Define parameter groups** (e.g. Group 1 = nitrate/nitrite codes, Group 2 =
+   streamflow, Group 3 = dissolved oxygen) with a searchable USGS parameter-code
+   picker (19k+ codes, offline snapshot included).
+2. **Discover sites** — state-by-state NWIS inventory queries keep only sites that
+   have data in **every** group (filter by data service, date window, wells,
+   minimum observations; deselect sites you don't want).
+3. **Download daily values** via [`dataretrieval`](https://github.com/DOI-USGS/dataretrieval-python)
+   with live progress, automatic **unit normalization** inside each group (e.g.
+   lb/day and tons/day nitrogen loads → mg/L via daily streamflow) and an honest
+   unit report — nothing is silently mixed.
+4. **Explore** — interactive CONUS map, scatterplots, and a sortable table of
+   per-site **medians** and pairwise **mutual information** between your groups,
+   recomputed on the fly for any date range, season, or month. PNG + CSV downloads.
 
-## How it works
+A bundled **demo dataset** (the original nitrate/streamflow/dissolved-oxygen
+research this tool grew out of, 169 CONUS sites) works out of the box.
 
-The heavy raw data (≈436 MB, 756 CSVs) never gets committed. Instead:
-
-1. **`python manage.py build_cache`** parses the raw sitedata **once** into three small
-   Parquet tables of per-day, per-site values (flow, NO3+NO2, DO) under `.cache/`.
-2. Each filter request slices those cached tables by date/season **in memory** and
-   recomputes medians + mutual information — so date-range and season filters return
-   correct, freshly-derived numbers in well under a second.
-3. Site metadata (coordinates, station name, region, HUC2) comes from the small
-   committed CSVs in `data/`, so no cartopy/geopandas is needed at runtime.
-
-**Offline fallback:** if the raw data / cache aren't present, the app serves the
-full-window numbers straight from the committed `data/` CSVs. Location, value, and MI
-filters still work; date/season filters are disabled with an on-screen banner.
-
-## Setup
+## Quick start
 
 ```bash
 pip install -r requirements.txt
-python manage.py migrate            # first run only (Django's own tables)
-```
-
-Point the app at your `nitro-research` checkout (the one with `sitedata/`). Only needed
-for recompute / building the cache:
-
-```bash
-# PowerShell
-$env:NITRO_DATA_ROOT = "C:\path\to\nitro-research"
-# bash
-export NITRO_DATA_ROOT=/c/path/to/nitro-research
-```
-
-If unset, it defaults to `../nitro-research` next to this repo.
-
-Build the cache (enables date/season recompute), then run the server:
-
-```bash
-python manage.py build_cache        # ~1-2 min; prints row/site counts
+python manage.py migrate
 python manage.py runserver
 ```
 
-Open **http://127.0.0.1:8000/** (the explorer is also at `/explorer/`).
+Open **http://127.0.0.1:8000/** → the demo dataset is ready to explore; click
+**+ New extraction** to start your own.
 
-## Filters
+## How an extraction works
 
-- **Time window** — start/end date, meteorological season (spring/summer/fall/winter),
-  or a single calendar month. Recomputes all medians & MI over just those days.
-  `Min paired days for MI` sets the minimum overlapping observations required to
-  estimate a mutual-information value (default 30).
-- **Location** — region (Florida / Mid Atlantic / Midwest / Big Midwest cluster /
-  Other), HUC2 region, and a free-text site number / station name search.
-- **Value & MI ranges** — min/max on each median and MI metric, plus minimum
-  observation-count thresholds.
-- **Charts** — map color (region or any metric), scatter X/Y axes (any metric),
-  log axes, and one-click presets (log E(Q) vs MI; NO3+NO2 vs DO; E(Q) vs E(C)).
+| Step | What happens |
+|---|---|
+| 1 · Setup | Name, date window, states (All-CONUS shortcut), data-service filters, 2–5 parameter groups. "Load example" fills the nitrate-research config. |
+| 2 · Discover | One NWIS inventory query per state (background job, live log). A site qualifies with ≥1 series matching your filters in **every** group. Review the coverage table + map, deselect sites. |
+| 3 · Download | Daily values fetched in small batches → per-site CSVs under `datasets_store/<slug>/raw/` → per-group daily Parquet tables → unit report. |
+| 4 · Explore | Filters (date/season/month, region, HUC2, site search, value/MI ranges, min observation counts), map + scatter with region or metric-gradient coloring, presets, log axes. |
+
+Every metric is derived from the per-group daily tables at request time, so
+date-range and season filters return **freshly recomputed medians and MI**
+(scikit-learn k-NN estimator, nats) in well under a second.
+
+Notes:
+- Only **daily values (dv)** are downloaded; other services (uv, qw, …) act as
+  site filters. USGS retired the qw download endpoint in March 2024.
+- HUC2 regions come from the NWIS inventory (`huc_cd`) — no shapefiles needed.
+- Delete a dataset from the list page; its downloads are removed with it.
+
+## The demo dataset & research parity
+
+`data/` ships small summary CSVs from the original
+[nitro-research](../nitro-research) study. The demo's full-window metrics match
+those research exports to floating-point precision (median streamflow, median
+NO3+NO2 mg/L-as-N, median DO, MI(flow, NO3+NO2), MI(NO3+NO2, DO)) — including two
+research quirks reproduced via per-pair rules (`Dataset.pairing_gates`).
+
+To enable date/season recompute for the demo, point `NITRO_DATA_ROOT` at a
+nitro-research checkout (with `sitedata/`) and run `python manage.py build_cache`.
+Without it the demo serves full-window values from the committed CSVs.
 
 ## Layout
 
 ```
 config/            Django project (settings, urls)
-explorer/
-  core/            vendored compute: conversions, loader, metrics, cache,
-                   metadata, filters, service, figures (Plotly)
-  management/commands/build_cache.py
-  forms.py views.py urls.py
-  templates/ static/
-data/              committed summary CSVs (metadata + offline fallback)
-.cache/            Parquet daily tables (gitignored; built by build_cache)
+datasets/          extraction wizard: models, NWIS client, units, builder,
+                   background jobs, wizard pages (list/setup/sites/download)
+explorer/          analysis UI: dataset-aware metrics/cache/figures (Plotly),
+                   filter form, map/scatter/table endpoints
+data/              committed: demo summary CSVs + USGS parameter-code snapshot
+datasets_store/    per-dataset downloads + daily tables (gitignored)
+.cache/            demo daily tables + parameter-code cache (gitignored)
 ```
-
-## Parity with nitro-research
-
-Full-window recompute matches the research1 exports to floating-point precision:
-
-| metric | vs source | max abs diff |
-|---|---|---|
-| median streamflow | `merged_site_data.csv` | 0 |
-| median NO3+NO2 | `merged_site_data.csv` | 9e-16 |
-| MI(flow, NO3+NO2) | `merged_site_data.csv` | 1e-16 |
-| median DO | `site_median_do.csv` | 0 |
-| MI(NO3+NO2, DO) | `sites_mutual_information_no3_do.csv` | 2e-16 |
-
-To refresh the committed metadata, re-copy the three CSVs from `nitro-research`
-(`qualifying_sites_map_export/merged_site_data.csv`,
-`dissolved_oxygen/site_median_do.csv`,
-`dissolved_oxygen/sites_mutual_information_no3_do.csv`) into `data/`, then rerun
-`build_cache`.
 
 ## Dependencies
 
-Django, pandas, numpy, scikit-learn (MI), plotly + kaleido (interactive figures and PNG
-export), pyarrow (Parquet). See `requirements.txt`.
+Django, pandas, numpy, scikit-learn (mutual information), plotly + kaleido
+(interactive figures / PNG export), pyarrow (Parquet), dataretrieval ≥ 1.2
+(NWIS + waterdata APIs). See `requirements.txt`.

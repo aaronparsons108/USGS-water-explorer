@@ -1,11 +1,12 @@
 from django.contrib import admin
 from django.urls import path, include
 
-from explorer import views as explorer_views
+from datasets import views as datasets_views
 
 urlpatterns = [
     #path('admin/', admin.site.urls),
+    path("datasets/", include("datasets.urls")),
     path("explorer/", include("explorer.urls")),
-    # Serve the explorer app at the site root too (200, so health checks pass).
-    path("", explorer_views.index, name="home"),
+    # Land on the datasets list (200, so health checks pass).
+    path("", datasets_views.list_view, name="home"),
 ]

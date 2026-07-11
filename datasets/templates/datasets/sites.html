@@ -1,0 +1,44 @@
+{% extends "datasets/base.html" %}
+{% load static %}
+{% block title %}Sites — {{ ds.name }}{% endblock %}
+{% block head %}<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>{% endblock %}
+
+{% block content %}
+<div class="steps">
+  <span class="step done">1 · Parameters &amp; scope</span>
+  <span class="step active">2 · Discover sites</span>
+  <span class="step">3 · Download &amp; build</span>
+  <span class="step">4 · Explore</span>
+</div>
+
+<div class="panel">
+  <h2>{{ ds.name }} — site discovery</h2>
+  <p class="note">Queries the NWIS inventory for each selected state and keeps
+     sites with at least one qualifying series in <strong>every</strong> parameter group.</p>
+  <div class="sites-toolbar">
+    <button type="button" class="btn primary" id="discover-btn">Run discovery</button>
+    <span class="note" id="job-msg"></span>
+  </div>
+  <div class="progress-wrap" id="progress-wrap" hidden><div class="progress-bar" id="progress-bar"></div></div>
+  <pre class="job-log" id="job-log" hidden></pre>
+</div>
+
+<div class="panel" id="results-panel" hidden>
+  <h2>Qualifying sites <span class="note" id="sites-summary"></span></h2>
+  <div class="sites-toolbar">
+    <button type="button" class="btn" id="sel-all">Select all</button>
+    <button type="button" class="btn" id="sel-none">Select none</button>
+    <input type="text" id="site-filter" placeholder="Filter table…" style="max-width:220px;">
+    <div class="spacer"></div>
+    <button type="button" class="btn primary" id="continue-btn">Save selection &amp; continue →</button>
+  </div>
+  <div id="sites-map" style="height:340px;"></div>
+  <div class="table-wrap" style="max-height:420px;">
+    <table id="sites-table"><thead></thead><tbody></tbody></table>
+  </div>
+</div>
+
+{{ bootstrap|json_script:"bootstrap" }}
+{% endblock %}
+
+{% block scripts %}<script src="{% static 'datasets/sites.js' %}"></script>{% endblock %}
