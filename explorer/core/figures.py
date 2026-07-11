@@ -43,12 +43,39 @@ def _empty(message: str) -> go.Figure:
     return fig
 
 
-def _hover_data(df: pd.DataFrame) -> dict:
-    cols = {"site_no": True, "location_type": True}
-    for c in _HOVER:
-        if c in df.columns:
-            cols[c] = ":.4g"
-    return cols
+def _fmt(v) -> str:
+    """Human-readable value for hover text; missing -> em dash."""
+    if v is None:
+        return "—"
+    if isinstance(v, (float, np.floating)):
+        if not np.isfinite(v):
+            return "—"
+        return f"{v:,.4g}"
+    if isinstance(v, (int, np.integer)):
+        return f"{v:,}"
+    s = str(v)
+    return s if s not in ("", "nan", "<NA>", "None") else "—"
+
+
+def _hover_strings(df: pd.DataFrame) -> pd.Series:
+    """Pre-rendered hover HTML per site: values are formatted server-side so the
+    browser never sees raw %{customdata[i]} templates (which Plotly leaves
+    unsubstituted when a value is missing)."""
+    lines = []
+    for _, r in df.iterrows():
+        parts = [
+            f"<b>{_fmt(r.get('station_nm'))}</b>",
+            f"site {_fmt(r.get('site_no'))} · {_fmt(r.get('location_type'))}"
+            + (f" · HUC2 {r.get('huc2')}" if _fmt(r.get("huc2")) != "—" else ""),
+        ]
+        for c in _HOVER:
+            if c in df.columns:
+                parts.append(f"{label(c)}: {_fmt(r.get(c))}")
+        lines.append("<br>".join(parts))
+    return pd.Series(lines, index=df.index)
+
+
+HOVER_TEMPLATE = "%{customdata[0]}<extra></extra>"
 
 
 # Clip continuous color scales to this percentile window (matches research1's
@@ -80,12 +107,12 @@ def map_figure(df: pd.DataFrame, color_col: str = "location_type") -> go.Figure:
     if plot.empty:
         return _empty("No sites with coordinates to map.")
 
+    plot["hover_html"] = _hover_strings(plot)
     common = dict(
         lat="dec_lat_va",
         lon="dec_long_va",
         scope="usa",
-        hover_name="station_nm",
-        hover_data=_hover_data(plot),
+        custom_data=["hover_html"],
     )
 
     if color_col == "location_type":
@@ -109,7 +136,10 @@ def map_figure(df: pd.DataFrame, color_col: str = "location_type") -> go.Figure:
         )
         fig.update_coloraxes(colorbar_title_text=label(color_col))
 
-    fig.update_traces(marker=dict(size=8, line=dict(width=0.5, color="black")))
+    fig.update_traces(
+        marker=dict(size=8, line=dict(width=0.5, color="black")),
+        hovertemplate=HOVER_TEMPLATE,
+    )
     fig.update_geos(
         showland=True, landcolor="#eef0f2",
         showlakes=True, lakecolor="#dfe7ef",
@@ -148,11 +178,11 @@ def scatter_figure(
     if plot.empty:
         return _empty("No sites have values for both axes (after log filtering).")
 
+    plot["hover_html"] = _hover_strings(plot)
     common = dict(
         x=x_col,
         y=y_col,
-        hover_name="station_nm",
-        hover_data=_hover_data(plot),
+        custom_data=["hover_html"],
         log_x=log_x,
         log_y=log_y,
     )
@@ -179,7 +209,10 @@ def scatter_figure(
         )
         fig.update_coloraxes(colorbar_title_text=label(color_col))
 
-    fig.update_traces(marker=dict(size=9, line=dict(width=0.5, color="black")))
+    fig.update_traces(
+        marker=dict(size=9, line=dict(width=0.5, color="black")),
+        hovertemplate=HOVER_TEMPLATE,
+    )
     fig.update_layout(
         margin=dict(l=60, r=20, t=50, b=50),
         xaxis_title=("log " if log_x else "") + label(x_col),

@@ -16,10 +16,19 @@ import time
 from collections import defaultdict
 
 import pandas as pd
-from dataretrieval import nwis
 
 from .catalog import CONUS_STATES
 from .models import CandidateSite, Dataset
+
+# dataretrieval prints a "Geopandas not installed" notice on import (harmless —
+# this app only uses plain-DataFrame columns). Import lazily so manage.py
+# commands don't print it; it surfaces once when the first NWIS job runs.
+
+
+def _nwis():
+    from dataretrieval import nwis
+
+    return nwis
 
 REQUEST_SLEEP_S = 0.4  # politeness between NWIS calls
 DOWNLOAD_BATCH_SITES = 10  # sites per get_dv call
@@ -64,7 +73,7 @@ def discover_sites(dataset: Dataset, progress=None, log=None) -> dict:
         if progress:
             progress(i / max(1, len(states)), f"Querying {st} ({i + 1}/{len(states)})")
         try:
-            sites, _ = nwis.get_info(
+            sites, _ = _nwis().get_info(
                 stateCd=st, parameterCd=codes, seriesCatalogOutput=True
             )
         except Exception as e:
@@ -150,7 +159,7 @@ def download_dv(dataset: Dataset, progress=None, log=None) -> dict:
         if progress:
             progress(done / max(1, len(sites)), f"Downloading sites {done + 1}-{min(done + len(batch), len(sites))} of {len(sites)}")
         try:
-            df, _ = nwis.get_dv(
+            df, _ = _nwis().get_dv(
                 sites=batch, parameterCd=codes, start=start, end=end, multi_index=False
             )
         except Exception as e:

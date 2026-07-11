@@ -94,6 +94,10 @@ def load_site_metadata() -> pd.DataFrame:
             meta[col] = pd.NA
     meta["dec_lat_va"] = pd.to_numeric(meta["dec_lat_va"], errors="coerce")
     meta["dec_long_va"] = pd.to_numeric(meta["dec_long_va"], errors="coerce")
+    # huc2 may parse as float ("5.0"); normalize to the zero-padded 2-char code.
+    huc = meta["huc2"].astype(str).str.split(".").str[0].str.strip()
+    meta["huc2"] = huc.where(huc.str.isdigit(), pd.NA)
+    meta.loc[meta["huc2"].notna(), "huc2"] = meta.loc[meta["huc2"].notna(), "huc2"].str.zfill(2)
 
     # Fill region for any site missing one (e.g. DO-only) from its coordinates.
     need = meta["location_type"].isna() | (meta["location_type"].astype(str).str.strip() == "")
