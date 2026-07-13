@@ -50,7 +50,8 @@
         <h2>Location</h2>
         <label>Region</label>
         <div class="checks">{{ form.regions }}</div>
-        <label>HUC2 region {{ form.huc2 }}</label>
+        <label>HUC2 region</label>
+        <div class="checks">{{ form.huc2 }}</div>
         <label>Site search (number or name) {{ form.site_query }}</label>
       </section>
 
@@ -77,15 +78,6 @@
           <label>Map color {{ form.map_color }}</label>
           <label>Scatter color {{ form.scatter_color }}</label>
         </div>
-        {% if presets %}
-        <label>Scatter presets</label>
-        <div class="presets">
-          {% for p in presets %}
-          <button type="button" class="preset" data-x="{{ p.x }}" data-y="{{ p.y }}"
-                  data-logx="{{ p.logx }}" data-logy="{{ p.logy }}">{{ p.label }}</button>
-          {% endfor %}
-        </div>
-        {% endif %}
         <div class="row two">
           <label>X axis {{ form.scatter_x }}</label>
           <label>Y axis {{ form.scatter_y }}</label>

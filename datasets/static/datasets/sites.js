@@ -29,6 +29,9 @@ function attachPolling() {
       renderJobProgress(job, els.bar, els.msg, els.log);
       els.btn.disabled = false;
       els.btn.textContent = "Re-run discovery";
+      if (job.message && job.message.includes("WARNING")) {
+        showError(job.message);
+      }
       loadSites();
     },
     onError: (job) => {

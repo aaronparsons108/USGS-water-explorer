@@ -89,17 +89,6 @@ async function loadResults() {
   }
 }
 
-// Scatter preset buttons set the axis selects, then resubmit.
-document.querySelectorAll(".preset").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    form.scatter_x.value = btn.dataset.x;
-    form.scatter_y.value = btn.dataset.y;
-    form.log_x.checked = btn.dataset.logx === "1";
-    form.log_y.checked = btn.dataset.logy === "1";
-    loadResults();
-  });
-});
-
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   loadResults();

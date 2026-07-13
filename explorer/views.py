@@ -49,31 +49,6 @@ def _columns(schema: dict, has_export_id: bool) -> list[dict]:
     return [{"key": c, "label": labels.get(c, c)} for c in cols]
 
 
-def _presets(schema: dict) -> list[dict]:
-    """Scatter presets derived from the dataset's groups."""
-    out = []
-    labels = schema["labels"]
-    meds, mis, pairs = schema["medians"], schema["mis"], schema["pairs"]
-    if meds and mis:
-        # log median of each pair's first group vs that pair's MI (up to 2)
-        for (i, j), mi in list(zip(pairs, mis))[:2]:
-            x = f"median_g{i}"
-            out.append(
-                {
-                    "label": f"log {labels.get(x, x)} vs {labels.get(mi, mi)}",
-                    "x": x, "y": mi, "logx": 1, "logy": 0,
-                }
-            )
-    if len(meds) >= 2:
-        out.append(
-            {
-                "label": f"{labels.get(meds[0], meds[0])} vs {labels.get(meds[1], meds[1])}",
-                "x": meds[0], "y": meds[1], "logx": 1, "logy": 1,
-            }
-        )
-    return out
-
-
 def _configure_figures(schema: dict) -> None:
     figures.set_schema(_labels(schema), schema["medians"] + schema["mis"])
 
@@ -99,7 +74,6 @@ def index(request, slug: str | None = None):
             "ds": ds,
             "form": form,
             "mode": data_mode(ds),
-            "presets": _presets(schema),
             "range_rows": range_rows,
             "count_rows": count_rows,
         },

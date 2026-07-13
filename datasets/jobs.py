@@ -49,12 +49,13 @@ def _run(job_id: int) -> None:
             Dataset.objects.filter(id=dataset.id).update(
                 status=Dataset.STATUS_SITES_READY, error_message=""
             )
-            msg = (
-                f"Found {res['qualifying']} qualifying sites "
-                f"({res['candidates']} candidates"
-                + (f", {len(res['failed_states'])} states failed" if res["failed_states"] else "")
-                + ")"
-            )
+            msg = f"Found {res['qualifying']} qualifying sites ({res['candidates']} candidates)"
+            if res["failed_states"]:
+                msg += (
+                    f" — WARNING: {len(res['failed_states'])} states failed even after "
+                    f"retries ({', '.join(res['failed_states'])}); results are incomplete, "
+                    "re-run discovery."
+                )
         elif job.kind == Job.KIND_DOWNLOAD:
             Dataset.objects.filter(id=dataset.id).update(status=Dataset.STATUS_DOWNLOADING)
             res = nwis_client.download_dv(dataset, progress=progress, log=log)

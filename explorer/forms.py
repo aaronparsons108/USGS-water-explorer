@@ -31,7 +31,11 @@ class FilterForm(forms.Form):
     regions = forms.MultipleChoiceField(
         required=False, choices=REGION_CHOICES, widget=forms.CheckboxSelectMultiple
     )
-    huc2 = forms.MultipleChoiceField(required=False, choices=[])
+    # Checkboxes so options toggle on/off individually (a multi-select list
+    # required ctrl-click and made deselection unclear).
+    huc2 = forms.MultipleChoiceField(
+        required=False, choices=[], widget=forms.CheckboxSelectMultiple
+    )
     site_query = forms.CharField(required=False, max_length=120)
 
     # --- visualization controls (choices filled per dataset) ---
