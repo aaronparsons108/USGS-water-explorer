@@ -175,9 +175,14 @@ def discover_sites(dataset: Dataset, progress=None, log=None) -> dict:
     return {"candidates": int(n_candidates), "qualifying": len(rows), "failed_states": failed_states}
 
 
-def download_dv(dataset: Dataset, progress=None, log=None) -> dict:
-    """Download daily values for every selected site; write research1-format CSVs."""
-    sites = list(dataset.sites.filter(selected=True).values_list("site_no", flat=True))
+def download_dv(dataset: Dataset, progress=None, log=None, sites=None) -> dict:
+    """Download daily values for the selected sites; write research1-format CSVs.
+
+    Failed batches are retried (same rounds as discovery). ``sites`` overrides
+    the selected-site list for targeted re-fetches.
+    """
+    if sites is None:
+        sites = list(dataset.sites.filter(selected=True).values_list("site_no", flat=True))
     codes = dataset.all_pmcodes()
     start = dataset.start_date.isoformat()
     end = dataset.end_date.isoformat()
@@ -185,52 +190,69 @@ def download_dv(dataset: Dataset, progress=None, log=None) -> dict:
     raw = dataset.raw_dir
     raw.mkdir(parents=True, exist_ok=True)
 
-    ok, empty, failed = 0, 0, []
-    batches = [sites[i : i + DOWNLOAD_BATCH_SITES] for i in range(0, len(sites), DOWNLOAD_BATCH_SITES)]
-    done = 0
-    for batch in batches:
-        if progress:
-            progress(done / max(1, len(sites)), f"Downloading sites {done + 1}-{min(done + len(batch), len(sites))} of {len(sites)}")
-        try:
-            df, _ = _nwis().get_dv(
-                sites=batch, parameterCd=codes, start=start, end=end, multi_index=False
-            )
-        except Exception as e:
-            failed.extend(batch)
-            _log(log, f"batch {batch[0]}..{batch[-1]}: FAILED ({type(e).__name__}: {str(e)[:120]})")
-            done += len(batch)
-            time.sleep(REQUEST_SLEEP_S)
-            continue
+    counts = {"ok": 0, "empty": 0}
 
-        if df is None or df.empty:
-            empty += len(batch)
-            _log(log, f"batch {batch[0]}..{batch[-1]}: no data")
-            done += len(batch)
-            time.sleep(REQUEST_SLEEP_S)
-            continue
-
-        df = df.reset_index()
-        # normalize the time column name to research1's 'datetime'
-        tcol = next((c for c in ("datetime", "dateTime", "index") if c in df.columns), None)
-        if tcol and tcol != "datetime":
-            df = df.rename(columns={tcol: "datetime"})
-        if "site_no" not in df.columns:  # single-site frames may drop it
-            df["site_no"] = batch[0]
-        df["site_no"] = df["site_no"].astype(str)
-
-        for site_no, sub in df.groupby("site_no"):
-            sub = sub.dropna(axis=1, how="all")
-            value_cols = [c for c in sub.columns if c not in ("datetime", "site_no")]
-            if not value_cols:
-                empty += 1
+    def fetch_batches(todo: list[str], round_label: str) -> list[str]:
+        failed: list[str] = []
+        batches = [todo[i : i + DOWNLOAD_BATCH_SITES] for i in range(0, len(todo), DOWNLOAD_BATCH_SITES)]
+        done = 0
+        for batch in batches:
+            if progress:
+                progress(
+                    done / max(1, len(todo)),
+                    f"{round_label}sites {done + 1}-{min(done + len(batch), len(todo))} of {len(todo)}",
+                )
+            try:
+                df, _ = _nwis().get_dv(
+                    sites=batch, parameterCd=codes, start=start, end=end, multi_index=False
+                )
+            except Exception as e:
+                failed.extend(batch)
+                _log(log, f"batch {batch[0]}..{batch[-1]}: FAILED ({type(e).__name__}: {str(e)[:120]})")
+                done += len(batch)
+                time.sleep(REQUEST_SLEEP_S)
                 continue
-            cols = ["datetime", "site_no"] + value_cols
-            sub[cols].to_csv(raw / f"usgs_{site_no}_all_obs.csv", index=False)
-            ok += 1
-            _log(log, f"{site_no}: {len(sub)} days, {len(value_cols)} columns")
-        done += len(batch)
-        time.sleep(REQUEST_SLEEP_S)
+
+            if df is None or df.empty:
+                counts["empty"] += len(batch)
+                _log(log, f"batch {batch[0]}..{batch[-1]}: no data")
+                done += len(batch)
+                time.sleep(REQUEST_SLEEP_S)
+                continue
+
+            df = df.reset_index()
+            # normalize the time column name to research1's 'datetime'
+            tcol = next((c for c in ("datetime", "dateTime", "index") if c in df.columns), None)
+            if tcol and tcol != "datetime":
+                df = df.rename(columns={tcol: "datetime"})
+            if "site_no" not in df.columns:  # single-site frames may drop it
+                df["site_no"] = batch[0]
+            df["site_no"] = df["site_no"].astype(str)
+
+            for site_no, sub in df.groupby("site_no"):
+                sub = sub.dropna(axis=1, how="all")
+                value_cols = [c for c in sub.columns if c not in ("datetime", "site_no")]
+                if not value_cols:
+                    counts["empty"] += 1
+                    continue
+                cols = ["datetime", "site_no"] + value_cols
+                sub[cols].to_csv(raw / f"usgs_{site_no}_all_obs.csv", index=False)
+                counts["ok"] += 1
+                _log(log, f"{site_no}: {len(sub)} days, {len(value_cols)} columns")
+            done += len(batch)
+            time.sleep(REQUEST_SLEEP_S)
+        return failed
+
+    failed = fetch_batches(list(sites), "Downloading ")
+    for wait in RETRY_ROUNDS:
+        if not failed:
+            break
+        _log(log, f"Retrying {len(failed)} failed sites in {wait}s")
+        if progress:
+            progress(0.0, f"Waiting {wait}s before retrying {len(failed)} sites…")
+        time.sleep(wait)
+        failed = fetch_batches(failed, "Retry ")
 
     if progress:
-        progress(1.0, f"Downloaded {ok} sites ({empty} empty, {len(failed)} failed)")
-    return {"ok": ok, "empty": empty, "failed": failed}
+        progress(1.0, f"Downloaded {counts['ok']} sites ({counts['empty']} empty, {len(failed)} failed)")
+    return {"ok": counts["ok"], "empty": counts["empty"], "failed": failed}
