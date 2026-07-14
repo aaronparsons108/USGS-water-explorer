@@ -4,6 +4,7 @@ the worker thread updates progress/message/log; wizard pages poll a JSON endpoin
 
 from __future__ import annotations
 
+import datetime as dt
 import threading
 import traceback
 
@@ -13,9 +14,25 @@ from django.utils import timezone
 from . import builder, nwis_client
 from .models import Dataset, Job
 
+# Jobs run in daemon threads, so a server restart orphans them mid-run. Any
+# "running" job older than this is dead; expire it instead of blocking the
+# dataset forever. Real CONUS jobs finish well within an hour.
+STALE_JOB_AGE = dt.timedelta(hours=3)
+
 
 def dataset_has_running_job(dataset: Dataset) -> bool:
-    return dataset.jobs.filter(status__in=[Job.STATUS_PENDING, Job.STATUS_RUNNING]).exists()
+    active = dataset.jobs.filter(status__in=[Job.STATUS_PENDING, Job.STATUS_RUNNING])
+    cutoff = timezone.now() - STALE_JOB_AGE
+    stale = active.filter(created_at__lt=cutoff)
+    if stale.exists():
+        stale.update(
+            status=Job.STATUS_ERROR,
+            message="Job died (server likely restarted mid-run) — re-run it.",
+            finished_at=timezone.now(),
+        )
+        if dataset.status in (Dataset.STATUS_DISCOVERING, Dataset.STATUS_DOWNLOADING):
+            Dataset.objects.filter(id=dataset.id).update(status=Dataset.STATUS_DRAFT)
+    return active.filter(created_at__gte=cutoff).exists()
 
 
 def start_job(dataset: Dataset, kind: str) -> Job:
