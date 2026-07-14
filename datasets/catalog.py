@@ -24,14 +24,17 @@ COLUMNS = [
     "parameter_description",
 ]
 
-# One-click preset matching the original nitro-research study.
+# One-click preset matching the original nitro-research study. Streamflow is
+# canonical-only (the study required the literal 00060_Mean series); analyte
+# groups accept sensor-labeled variants, as the study did for nitrate.
 EXAMPLE_GROUPS = [
     {
         "label": "Nitrate/Nitrite",
         "codes": ["99133", "00631", "00630", "91049", "91061", "83554"],
+        "require_canonical": False,
     },
-    {"label": "Streamflow", "codes": ["00060"]},
-    {"label": "Dissolved Oxygen", "codes": ["00300"]},
+    {"label": "Streamflow", "codes": ["00060"], "require_canonical": True},
+    {"label": "Dissolved Oxygen", "codes": ["00300"], "require_canonical": False},
 ]
 
 # Standard WBD HUC2 region names (no shapefile needed).

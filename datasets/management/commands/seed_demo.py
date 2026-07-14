@@ -44,7 +44,11 @@ def seed_demo_dataset() -> Dataset:
     ds.groups.all().delete()
     for pos, g in enumerate(EXAMPLE_GROUPS, start=1):
         ParameterGroup.objects.create(
-            dataset=ds, position=pos, label=g["label"], pmcodes=pmcode_info(g["codes"])
+            dataset=ds,
+            position=pos,
+            label=g["label"],
+            pmcodes=pmcode_info(g["codes"]),
+            require_canonical=bool(g.get("require_canonical")),
         )
 
     # Candidate sites from the committed summary CSVs (merged + DO-only sites).

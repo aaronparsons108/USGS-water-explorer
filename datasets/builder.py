@@ -17,8 +17,14 @@ from .units import apply_conversion, plan_group_units
 NWIS_SENTINELS = (-999999.0, -99999.0)
 
 
-def _mean_cols_for_code(columns, code: str) -> list[str]:
-    """Daily Mean columns belonging to one parameter code (never *_cd)."""
+def _mean_cols_for_code(columns, code: str, canonical_only: bool = False) -> list[str]:
+    """Daily Mean columns belonging to one parameter code (never *_cd).
+
+    ``canonical_only`` keeps just the primary ``<code>_Mean`` column, dropping
+    labeled auxiliaries like ``00060_index velocity_Mean``.
+    """
+    if canonical_only:
+        return [f"{code}_Mean"] if f"{code}_Mean" in columns else []
     out = []
     for c in columns:
         if c.endswith("_cd") or "Mean" not in c:
@@ -57,7 +63,8 @@ def build_daily_tables(dataset: Dataset, progress=None, log=None) -> dict:
             df["datetime"] = df["datetime"].dt.tz_convert(None)
         df["site_no"] = df["site_no"].astype(str)
 
-        flow_cols = _mean_cols_for_code(df.columns, "00060")
+        # Load-based unit conversions divide by the primary daily discharge.
+        flow_cols = _mean_cols_for_code(df.columns, "00060", canonical_only=True)
         flow = _clean(df[flow_cols[0]]) if flow_cols else None
 
         for g in groups:
@@ -67,7 +74,7 @@ def build_daily_tables(dataset: Dataset, progress=None, log=None) -> dict:
                 act = actions.get(code, {"action": "exclude"})
                 if act["action"] == "exclude":
                     continue
-                for col in _mean_cols_for_code(df.columns, code):
+                for col in _mean_cols_for_code(df.columns, code, g.require_canonical):
                     vals = _clean(df[col])
                     if act["action"] == "convert":
                         vals = apply_conversion(vals, flow, act["conversion"])

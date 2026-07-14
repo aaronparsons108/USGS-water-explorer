@@ -79,7 +79,12 @@ def setup_view(request, pk: int):
         "exclude_wells": ds.exclude_wells,
         "min_count_per_series": ds.min_count_per_series,
         "groups": [
-            {"position": g.position, "label": g.label, "pmcodes": g.pmcodes}
+            {
+                "position": g.position,
+                "label": g.label,
+                "pmcodes": g.pmcodes,
+                "require_canonical": g.require_canonical,
+            }
             for g in ds.groups_ordered()
         ],
         "example_groups": catalog.EXAMPLE_GROUPS,
@@ -145,6 +150,7 @@ def setup_save(request, pk: int):
             dataset=ds,
             position=i,
             label=str(g["label"]).strip()[:80],
+            require_canonical=bool(g.get("require_canonical")),
             pmcodes=[
                 {
                     "code": str(p["code"]).zfill(5),

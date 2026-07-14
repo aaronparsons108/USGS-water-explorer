@@ -3,8 +3,14 @@
 /* Step 1: dataset setup — groups builder with parameter-code picker. */
 
 const B = JSON.parse(document.getElementById("bootstrap").textContent);
-let groups = B.groups.map((g) => ({ label: g.label, pmcodes: [...g.pmcodes] }));
-while (groups.length < B.min_groups) groups.push({ label: `Group ${groups.length + 1}`, pmcodes: [] });
+let groups = B.groups.map((g) => ({
+  label: g.label,
+  pmcodes: [...g.pmcodes],
+  require_canonical: !!g.require_canonical,
+}));
+while (groups.length < B.min_groups) {
+  groups.push({ label: `Group ${groups.length + 1}`, pmcodes: [], require_canonical: false });
+}
 
 /* --- basic fields --- */
 document.getElementById("ds-name").value = B.name;
@@ -69,7 +75,11 @@ function renderGroups() {
       <div class="pm-search">
         <input type="text" class="pm-input" data-g="${gi}" placeholder="Search parameter codes (e.g. 00060 or nitrate)…" autocomplete="off">
         <div class="pm-results" hidden></div>
-      </div>`;
+      </div>
+      <label class="inline g-canonical-label" title="NWIS labels auxiliary series (e.g. 'index velocity', 'dam tailwater'); unchecked also accepts those sensor-labeled variants.">
+        <input type="checkbox" class="g-canonical" data-g="${gi}" ${g.require_canonical ? "checked" : ""}>
+        Primary (unlabeled) series only
+      </label>`;
     groupsDiv.appendChild(box);
   });
 }
@@ -80,6 +90,12 @@ groupsDiv.addEventListener("input", (e) => {
   }
   if (e.target.classList.contains("pm-input")) {
     searchPmcodes(e.target);
+  }
+});
+
+groupsDiv.addEventListener("change", (e) => {
+  if (e.target.classList.contains("g-canonical")) {
+    groups[+e.target.dataset.g].require_canonical = e.target.checked;
   }
 });
 
@@ -137,7 +153,7 @@ document.addEventListener("click", (e) => {
 document.getElementById("add-group").onclick = () => {
   if (groups.length >= B.max_groups) { showError(`Maximum ${B.max_groups} groups.`); return; }
   clearError();
-  groups.push({ label: `Group ${groups.length + 1}`, pmcodes: [] });
+  groups.push({ label: `Group ${groups.length + 1}`, pmcodes: [], require_canonical: false });
   renderGroups();
 };
 
@@ -154,7 +170,7 @@ document.getElementById("load-example").onclick = async () => {
         pmcodes.push(hit || { code, name: "", unit: "" });
       } catch { pmcodes.push({ code, name: "", unit: "" }); }
     }
-    filled.push({ label: eg.label, pmcodes });
+    filled.push({ label: eg.label, pmcodes, require_canonical: !!eg.require_canonical });
   }
   groups = filled;
   renderGroups();

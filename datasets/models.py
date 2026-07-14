@@ -141,6 +141,12 @@ class ParameterGroup(models.Model):
     label = models.CharField(max_length=80)
     # [{"code": "99133", "name": "NO3+NO2,water,insitu", "unit": "mg/l as N"}, ...]
     pmcodes = models.JSONField(default=list)
+    # Only count/use primary (unlabeled) series for this group. NWIS marks
+    # auxiliary series via loc_web_ds ("index velocity", "dam tailwater", ...),
+    # which download as "<code>_<label>_Mean" columns. Strict is right for e.g.
+    # streamflow; permissive groups also accept sensor-labeled variants
+    # ("suna", "corrected nitrate", intake locations).
+    require_canonical = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["position"]

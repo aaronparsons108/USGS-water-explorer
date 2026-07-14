@@ -13,7 +13,6 @@ existing parsing idioms apply unchanged.
 from __future__ import annotations
 
 import time
-from collections import defaultdict
 
 import pandas as pd
 
@@ -93,10 +92,8 @@ def discover_sites(dataset: Dataset, progress=None, log=None) -> dict:
     start = dataset.start_date.isoformat()
     end = dataset.end_date.isoformat()
     groups = dataset.groups_ordered()
-    code_to_groups: dict[str, list[int]] = defaultdict(list)
-    for g in groups:
-        for c in g.codes():
-            code_to_groups[c].append(g.position)
+    group_codes = {g.position: set(g.codes()) for g in groups}
+    group_canonical = {g.position: g.require_canonical for g in groups}
 
     frames: list[pd.DataFrame] = []
 
@@ -143,15 +140,26 @@ def discover_sites(dataset: Dataset, progress=None, log=None) -> dict:
 
     inv = pd.concat(frames, ignore_index=True)
 
+    # A series is "canonical" when NWIS gives it no web label (loc_web_ds);
+    # labeled series download as "<code>_<label>_Mean" auxiliary columns.
+    if "loc_web_ds" in inv.columns:
+        lab = inv["loc_web_ds"]
+        inv["is_canonical"] = lab.isna() | (lab.astype(str).str.strip().isin(["", "nan"]))
+    else:
+        inv["is_canonical"] = True
+
     rows: list[CandidateSite] = []
     n_candidates = inv["site_no"].nunique()
     for site_no, sub in inv.groupby("site_no"):
-        coverage: dict[str, list[str]] = defaultdict(list)
-        for code in sub["parm_cd"].unique():
-            for pos in code_to_groups.get(code, []):
-                coverage[str(pos)].append(code)
+        coverage: dict[str, list[str]] = {}
+        for pos, gcodes in group_codes.items():
+            g_rows = sub[sub["parm_cd"].isin(gcodes)]
+            if group_canonical[pos]:
+                g_rows = g_rows[g_rows["is_canonical"]]
+            if not g_rows.empty:
+                coverage[str(pos)] = sorted(g_rows["parm_cd"].unique())
         if len(coverage) < len(groups):
-            continue  # must have >=1 code in EVERY group
+            continue  # must have >=1 qualifying code in EVERY group
         first = sub.iloc[0]
         rows.append(
             CandidateSite(
@@ -163,7 +171,7 @@ def discover_sites(dataset: Dataset, progress=None, log=None) -> dict:
                 dec_lat_va=pd.to_numeric(first.get("dec_lat_va"), errors="coerce"),
                 dec_long_va=pd.to_numeric(first.get("dec_long_va"), errors="coerce"),
                 huc_cd=_norm_huc(first.get("huc_cd")),
-                group_coverage={k: sorted(set(v)) for k, v in coverage.items()},
+                group_coverage=coverage,
                 begin_date=str(sub["begin_date"].min()),
                 end_date=str(sub["end_date"].max()),
                 total_count=int(pd.to_numeric(sub["count_nu"], errors="coerce").fillna(0).sum()),
