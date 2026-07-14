@@ -43,7 +43,11 @@
           <label>Season {{ form.season }}</label>
           <label>Month {{ form.month }}</label>
         </div>
-        <label>Min paired days for MI {{ form.min_paired_days }}</label>
+        <label>Min paired days to estimate MI {{ form.min_paired_days }}</label>
+        <p class="hint">Sites below this show &mdash; for MI but stay listed
+           (their medians are still valid). To drop them from the table and map,
+           set a &ldquo;# paired days&rdquo; minimum under
+           <strong>Value &amp; MI ranges &rarr; Minimum observation counts</strong>.</p>
       </section>
 
       <section class="fieldset">
