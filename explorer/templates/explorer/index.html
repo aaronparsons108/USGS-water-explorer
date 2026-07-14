@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ ds.name }} — USGS Site Explorer</title>
-  <link rel="stylesheet" href="{% static 'explorer/app.css' %}">
-  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}">
+  <link rel="stylesheet" href="{% static 'explorer/app.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}?v={% now 'U' %}">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 </head>
 <body>
@@ -140,6 +140,6 @@
     scatterPng: "{% url 'explorer:download_png' ds.slug 'scatter' %}",
   };
 </script>
-<script src="{% static 'explorer/app.js' %}"></script>
+<script src="{% static 'explorer/app.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf" content="{{ csrf_token }}">
   <title>{% block title %}USGS Site Explorer{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'explorer/app.css' %}">
-  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}">
+  <link rel="stylesheet" href="{% static 'explorer/app.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}?v={% now 'U' %}">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -25,7 +25,7 @@
 <div class="page">
   {% block content %}{% endblock %}
 </div>
-<script src="{% static 'datasets/wizard.js' %}"></script>
+<script src="{% static 'datasets/wizard.js' %}?v={% now 'U' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

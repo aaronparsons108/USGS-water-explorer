@@ -59,4 +59,4 @@
 {{ bootstrap|json_script:"bootstrap" }}
 {% endblock %}
 
-{% block scripts %}<script src="{% static 'datasets/setup.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'datasets/setup.js' %}?v={% now 'U' %}"></script>{% endblock %}

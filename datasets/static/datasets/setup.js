@@ -76,9 +76,10 @@ function renderGroups() {
         <input type="text" class="pm-input" data-g="${gi}" placeholder="Search parameter codes (e.g. 00060 or nitrate)…" autocomplete="off">
         <div class="pm-results" hidden></div>
       </div>
-      <label class="inline g-canonical-label" title="NWIS labels auxiliary series (e.g. 'index velocity', 'dam tailwater'); unchecked also accepts those sensor-labeled variants.">
+      <label class="inline g-canonical-label">
         <input type="checkbox" class="g-canonical" data-g="${gi}" ${g.require_canonical ? "checked" : ""}>
-        Primary (unlabeled) series only
+        Primary series only
+        <span class="note">&mdash; ignore specially-labeled extras like &ldquo;index velocity&rdquo;, &ldquo;dam tailwater&rdquo;, &ldquo;suna sensor&rdquo;</span>
       </label>`;
     groupsDiv.appendChild(box);
   });

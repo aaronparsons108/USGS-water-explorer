@@ -40,4 +40,4 @@
 {{ bootstrap|json_script:"bootstrap" }}
 {% endblock %}
 
-{% block scripts %}<script src="{% static 'datasets/download.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'datasets/download.js' %}?v={% now 'U' %}"></script>{% endblock %}
