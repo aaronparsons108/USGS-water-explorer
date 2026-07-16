@@ -55,8 +55,20 @@ function renderTable(columns, rows) {
 function renderPlots(data) {
   const cfg = { responsive: true, displaylogo: false };
   Plotly.react("map-div", data.map.data, data.map.layout, cfg);
-  // Force the scatter into its square container (was stretching full-width).
-  const sq = Object.assign({}, data.scatter.layout, { autosize: true });
+  // Make the SCATTER PLOT AREA square (not just the container): give both axes
+  // the same paper-domain span inside the square container, and dock the legend
+  // in the reserved right strip so it doesn't squeeze the plot.
+  const L = data.scatter.layout || {};
+  const sq = Object.assign({}, L, {
+    autosize: true,
+    title: { text: "" }, // long title was clipped; the axes + card header describe it
+    // autoexpand:false keeps the paper (and thus the equal-domain plot area) square;
+    // symmetric margins leave room for labels/legend in the domain gutters.
+    margin: { l: 8, r: 8, t: 8, b: 8, pad: 0, autoexpand: false },
+    xaxis: Object.assign({}, L.xaxis, { domain: [0.14, 0.86], automargin: false }),
+    yaxis: Object.assign({}, L.yaxis, { domain: [0.14, 0.86], automargin: false }),
+    legend: Object.assign({}, L.legend, { x: 0.88, xanchor: "left", y: 0.5, yanchor: "middle" }),
+  });
   Plotly.react("scatter-div", data.scatter.data, sq, cfg);
   Plotly.Plots.resize("scatter-div");
 }
