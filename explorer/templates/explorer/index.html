@@ -77,11 +77,11 @@
       </section>
 
       <section class="fieldset">
-        <h2>Charts</h2>
-        <div class="row two">
-          <label>Map color {{ form.map_color }}</label>
-          <label>Scatter color {{ form.scatter_color }}</label>
-        </div>
+        <h2>Visualize</h2>
+        <p class="hint">These drive both the interactive charts and the
+           publication-style figures on the right.</p>
+        <label>Map — color bubbles by {{ form.map_color }}</label>
+        <h3>Scatter axes</h3>
         <div class="row two">
           <label>X axis {{ form.scatter_x }}</label>
           <label>Y axis {{ form.scatter_y }}</label>
@@ -90,6 +90,7 @@
           <label class="inline">{{ form.log_x }} log X</label>
           <label class="inline">{{ form.log_y }} log Y</label>
         </div>
+        <label>Interactive scatter color {{ form.scatter_color }}</label>
       </section>
 
       <div class="actions">
@@ -104,21 +105,50 @@
     <div id="banner" class="banner" hidden></div>
     <div id="status" class="status">Loading&hellip;</div>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>Map</h2>
-        <a id="dl-map" class="dl" href="#">Download PNG</a>
-      </div>
-      <div id="map-div" class="plot"></div>
-    </section>
+    <div class="tabbar">
+      <button type="button" class="tab active" data-tab="interactive">Interactive</button>
+      <button type="button" class="tab" data-tab="publication">Publication figures</button>
+    </div>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>Scatter</h2>
-        <a id="dl-scatter" class="dl" href="#">Download PNG</a>
-      </div>
-      <div id="scatter-div" class="plot"></div>
-    </section>
+    <!-- Interactive (Plotly) -->
+    <div class="tab-panel" data-panel="interactive">
+      <section class="card">
+        <div class="card-head">
+          <h2>Map <span class="muted">— hover &amp; zoom</span></h2>
+          <a id="dl-map" class="dl" href="#">PNG</a>
+        </div>
+        <div id="map-div" class="plot"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>Scatter</h2>
+          <a id="dl-scatter" class="dl" href="#">PNG</a>
+        </div>
+        <div id="scatter-div" class="plot plot-square"></div>
+      </section>
+    </div>
+
+    <!-- Publication (matplotlib / cartopy, research style) -->
+    <div class="tab-panel" data-panel="publication" hidden>
+      <p class="hint pub-note">Research-style figures matching the nitro-research study.
+        The <strong>map</strong> uses your “Map — color bubbles by” metric (a region
+        selection falls back to the first mutual-information metric); the
+        <strong>scatter</strong> uses your X/Y axes, colored by HUC-2.</p>
+      <section class="card">
+        <div class="card-head">
+          <h2>Research map</h2>
+          <a id="dl-research-map" class="dl" href="#">Download PNG</a>
+        </div>
+        <div class="research-wrap"><img id="research-map-img" class="research-img" alt="research map"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>Research scatter</h2>
+          <a id="dl-research-scatter" class="dl" href="#">Download PNG</a>
+        </div>
+        <div class="research-wrap"><img id="research-scatter-img" class="research-img research-img-square" alt="research scatter"></div>
+      </section>
+    </div>
 
     <section class="card">
       <div class="card-head">
@@ -138,6 +168,8 @@
     csv: "{% url 'explorer:download_csv' ds.slug %}",
     mapPng: "{% url 'explorer:download_png' ds.slug 'map' %}",
     scatterPng: "{% url 'explorer:download_png' ds.slug 'scatter' %}",
+    researchMap: "{% url 'explorer:research_png' ds.slug 'map' %}",
+    researchScatter: "{% url 'explorer:research_png' ds.slug 'scatter' %}",
   };
 </script>
 <script src="{% static 'explorer/app.js' %}?v={% now 'U' %}"></script>

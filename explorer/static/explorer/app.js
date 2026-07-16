@@ -5,7 +5,7 @@ const form = document.getElementById("filter-form");
 const statusEl = document.getElementById("status");
 const bannerEl = document.getElementById("banner");
 
-function currentQuery() {
+function buildQuery() {
   // Serialize the form, dropping empty values so the URL stays clean.
   const fd = new FormData(form);
   const params = new URLSearchParams();
@@ -55,17 +55,64 @@ function renderTable(columns, rows) {
 function renderPlots(data) {
   const cfg = { responsive: true, displaylogo: false };
   Plotly.react("map-div", data.map.data, data.map.layout, cfg);
-  Plotly.react("scatter-div", data.scatter.data, data.scatter.layout, cfg);
+  // Force the scatter into its square container (was stretching full-width).
+  const sq = Object.assign({}, data.scatter.layout, { autosize: true });
+  Plotly.react("scatter-div", data.scatter.data, sq, cfg);
+  Plotly.Plots.resize("scatter-div");
 }
 
 function updateDownloadLinks(query) {
   document.getElementById("dl-map").href = `${U.mapPng}?${query}`;
   document.getElementById("dl-scatter").href = `${U.scatterPng}?${query}`;
   document.getElementById("dl-csv").href = `${U.csv}?${query}`;
+  document.getElementById("dl-research-map").href = `${U.researchMap}?${query}&download=1`;
+  document.getElementById("dl-research-scatter").href = `${U.researchScatter}?${query}&download=1`;
 }
 
+// --- Publication (research-style matplotlib) tab: load lazily on demand ---
+let currentQuery = "";
+let pubLoadedQuery = null;
+
+function activePanel() {
+  const t = document.querySelector(".tab.active");
+  return t ? t.dataset.tab : "interactive";
+}
+
+function loadResearchImages() {
+  if (pubLoadedQuery === currentQuery) return;
+  pubLoadedQuery = currentQuery;
+  const map = document.getElementById("research-map-img");
+  const sc = document.getElementById("research-scatter-img");
+  for (const [img, url] of [[map, U.researchMap], [sc, U.researchScatter]]) {
+    img.classList.add("loading");
+    img.onload = img.onerror = () => img.classList.remove("loading");
+    img.src = `${url}?${currentQuery}`;
+  }
+}
+
+function maybeLoadResearch() {
+  if (activePanel() === "publication") loadResearchImages();
+}
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".tab-panel").forEach((p) => {
+      p.hidden = p.dataset.panel !== tab.dataset.tab;
+    });
+    if (tab.dataset.tab === "interactive") {
+      Plotly.Plots.resize("map-div");
+      Plotly.Plots.resize("scatter-div");
+    } else {
+      loadResearchImages();
+    }
+  });
+});
+
 async function loadResults() {
-  const query = currentQuery();
+  const query = buildQuery();
+  currentQuery = query;
+  pubLoadedQuery = null; // filters changed -> research images are stale
   statusEl.textContent = "Computing…";
   statusEl.hidden = false;
   try {
@@ -80,6 +127,7 @@ async function loadResults() {
     renderPlots(data);
     renderTable(data.columns, data.rows);
     updateDownloadLinks(data.query || query);
+    maybeLoadResearch();
     const i = data.info;
     statusEl.textContent =
       `${i.n_filtered} of ${i.n_total} sites · mode: ${i.mode}` +

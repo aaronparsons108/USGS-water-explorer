@@ -53,7 +53,9 @@ class FilterForm(forms.Form):
         labels = self.schema["labels"]
 
         # Value/MI range metrics + count thresholds from the schema.
-        self.range_metrics = self.schema["medians"] + self.schema["mis"]
+        self.range_metrics = (
+            self.schema["medians"] + self.schema["mis"] + self.schema.get("nmis", [])
+        )
         self.count_cols = [
             c for c in self.schema["numeric"] if c.startswith(("n_g", "n_paired_"))
         ]

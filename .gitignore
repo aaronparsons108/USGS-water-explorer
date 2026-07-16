@@ -33,3 +33,6 @@ Thumbs.db
 
 # Plotly/kaleido scratch
 *.png.tmp
+
+# Cached US-states basemap (downloaded at first research-figure render)
+explorer/core/research/_us_states_conus.gpkg

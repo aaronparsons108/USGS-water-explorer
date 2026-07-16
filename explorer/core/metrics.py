@@ -19,6 +19,8 @@ except ImportError as e:  # pragma: no cover
         "explorer metrics require scikit-learn (pip install scikit-learn)"
     ) from e
 
+from .research.normalized_mi import normalized_mi as _binned_normalized_mi
+
 DEFAULT_MIN_PAIRED_DAYS = 30
 
 # Output column names (match merged_site_data.csv + DO CSVs where they overlap).
@@ -107,6 +109,30 @@ def _mi_from_paired(
     return pd.DataFrame(rows)
 
 
+def _nmi_from_paired(
+    paired: pd.DataFrame,
+    ref_col: str,
+    other_col: str,
+    nmi_name: str,
+    min_paired_days: int,
+) -> pd.DataFrame:
+    """Per-site binned normalized MI = I_bin(ref;other)/H_bin(ref), clipped [0,1]."""
+    cols = ["site_no", nmi_name]
+    if paired is None or paired.empty:
+        return pd.DataFrame(columns=cols)
+    rows = []
+    floor = max(4, min_paired_days)
+    for site_no, sub in paired.groupby("site_no"):
+        if len(sub) >= floor:
+            _, _, u = _binned_normalized_mi(
+                sub[ref_col].to_numpy(), sub[other_col].to_numpy(), min_paired_days=floor
+            )
+        else:
+            u = np.nan
+        rows.append({"site_no": site_no, nmi_name: u})
+    return pd.DataFrame(rows)
+
+
 def compute_group_metrics(
     daily_by_pos: dict[int, pd.DataFrame],
     *,
@@ -163,9 +189,15 @@ def compute_group_metrics(
         mi = _mi_from_paired(
             pr, f"v{x_pos}", f"v{y_pos}", f"mi_g{i}_g{j}", f"n_paired_g{i}_g{j}", min_paired_days
         )
+        # Normalized MI (binned uncertainty coefficient), normalized by the
+        # entropy of the lower-position group i (the reference analyte).
+        nmi = _nmi_from_paired(
+            pr, f"v{i}", f"v{j}", f"nmi_g{i}_g{j}", min_paired_days
+        )
+        merged_pair = mi.merge(nmi, on="site_no", how="outer") if not nmi.empty else mi
         if out is None:
-            out = mi
+            out = merged_pair
         else:
-            out = out.merge(mi, on="site_no", how="outer")
+            out = out.merge(merged_pair, on="site_no", how="outer")
 
     return out if out is not None else pd.DataFrame(columns=["site_no"])

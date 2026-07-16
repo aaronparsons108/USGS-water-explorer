@@ -103,7 +103,7 @@ class Dataset(models.Model):
         """
         groups = self.groups_ordered()
         labels: dict[str, str] = {}
-        medians, counts, mis, paired = [], [], [], []
+        medians, counts, mis, nmis, paired = [], [], [], [], []
         for g in groups:
             unit = g.display_unit()
             med, cnt = f"median_g{g.position}", f"n_g{g.position}"
@@ -114,23 +114,26 @@ class Dataset(models.Model):
         pairs = list(combinations([g.position for g in groups], 2))
         by_pos = {g.position: g for g in groups}
         for i, j in pairs:
-            mi, np_ = f"mi_g{i}_g{j}", f"n_paired_g{i}_g{j}"
+            mi, nmi, np_ = f"mi_g{i}_g{j}", f"nmi_g{i}_g{j}", f"n_paired_g{i}_g{j}"
             mis.append(mi)
+            nmis.append(nmi)
             paired.append(np_)
             labels[mi] = f"MI({by_pos[i].label}; {by_pos[j].label}) (nats)"
+            labels[nmi] = f"Normalized MI I({by_pos[i].label}; {by_pos[j].label})/H({by_pos[i].label})"
             labels[np_] = f"# paired days ({by_pos[i].label}, {by_pos[j].label})"
-        numeric = medians + mis + counts + paired
+        numeric = medians + mis + nmis + counts + paired
         meta_cols = [
             "site_no", "station_nm", "location_type", "huc2", "huc2_region_name",
             "dec_lat_va", "dec_long_va",
         ]
-        columns = meta_cols + medians + counts + mis + paired
+        columns = meta_cols + medians + counts + mis + nmis + paired
         return {
             "columns": columns,
             "labels": labels,
             "numeric": numeric,
             "medians": medians,
             "mis": mis,
+            "nmis": nmis,
             "pairs": pairs,
         }
 

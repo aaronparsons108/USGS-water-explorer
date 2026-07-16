@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from datasets.models import Dataset
 
-from .core import figures
+from .core import figures, research_figures
 from .core.service import assemble, data_mode
 from .forms import FilterForm
 
@@ -94,7 +94,9 @@ def results(request, slug: str):
     map_fig = figures.map_figure(table, color_col=fk["map_color"])
     scatter_fig = figures.scatter_figure(
         table, fk["scatter_x"], fk["scatter_y"],
-        log_x=fk["log_x"], log_y=fk["log_y"], color_col=fk["scatter_color"],
+        log_x=research_figures.effective_log(fk["scatter_x"], fk["log_x"]),
+        log_y=research_figures.effective_log(fk["scatter_y"], fk["log_y"]),
+        color_col=fk["scatter_color"],
     )
 
     rows = json.loads(table.to_json(orient="records"))
@@ -125,7 +127,9 @@ def download_png(request, slug: str, kind: str):
     elif kind == "scatter":
         fig = figures.scatter_figure(
             table, fk["scatter_x"], fk["scatter_y"],
-            log_x=fk["log_x"], log_y=fk["log_y"], color_col=fk["scatter_color"],
+            log_x=research_figures.effective_log(fk["scatter_x"], fk["log_x"]),
+            log_y=research_figures.effective_log(fk["scatter_y"], fk["log_y"]),
+            color_col=fk["scatter_color"],
         )
         fname = f"{ds.slug}_scatter.png"
     else:
@@ -140,6 +144,47 @@ def download_png(request, slug: str, kind: str):
 
     resp = HttpResponse(png, content_type="image/png")
     resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
+
+
+def research_png(request, slug: str, kind: str):
+    """Publication-style (matplotlib/cartopy) PNG: CONUS map or HUC-2 scatter.
+
+    Inline by default (for <img> preview); pass ?download=1 for an attachment.
+    """
+    ds = _get_dataset(slug)
+    form = FilterForm(ds, request.GET)
+    if not form.is_valid():
+        return JsonResponse({"errors": form.errors}, status=400)
+
+    table, _ = assemble(ds, **form.service_kwargs())
+    schema = ds.metric_schema()
+    fk = form.figure_kwargs()
+
+    try:
+        if kind == "map":
+            metric = request.GET.get("metric") or fk.get("map_color")
+            if not metric or metric not in schema["numeric"]:
+                # region/blank isn't a continuous metric — fall back to first MI/median
+                metric = (schema["mis"] or schema["medians"] or [None])[0]
+            if metric is None:
+                return JsonResponse({"error": "no metric to map"}, status=400)
+            png = research_figures.render_map(table, metric, schema)
+            fname = f"{ds.slug}_research_map.png"
+        elif kind == "scatter":
+            png = research_figures.render_scatter(
+                table, fk["scatter_x"], fk["scatter_y"], schema,
+                logx=fk["log_x"], logy=fk["log_y"],
+            )
+            fname = f"{ds.slug}_research_scatter.png"
+        else:
+            return JsonResponse({"error": f"unknown figure '{kind}'"}, status=404)
+    except Exception as e:  # matplotlib/cartopy failure
+        return JsonResponse({"error": f"Research PNG failed: {e}"}, status=500)
+
+    resp = HttpResponse(png, content_type="image/png")
+    if request.GET.get("download"):
+        resp["Content-Disposition"] = f'attachment; filename="{fname}"'
     return resp
 
 
