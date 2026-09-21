@@ -81,6 +81,44 @@ def effective_log(col: str, requested: bool) -> bool:
     return bool(requested) and only_log_makes_sense(col)
 
 
+# Map framing. scope="usa" is the only Plotly setting that draws state
+# boundaries, but it forces the Alaska and Hawaii insets and ignores lat/lon
+# ranges, so the basemap is framed with center and zoom instead. A CONUS
+# extraction then fills the canvas rather than giving a quarter of it to two
+# empty insets, and a single-state extraction zooms to that state.
+GEO_PAD_FRAC = 0.16
+# Roughly what the albers-usa basemap spans at zoom 1, in degrees.
+GEO_BASE_LON_SPAN = 58.0
+GEO_BASE_LAT_SPAN = 26.0
+# Below this the insets stay on screen; above it a lone site fills the frame
+# with featureless land.
+GEO_MIN_ZOOM = 1.3
+GEO_MAX_ZOOM = 6.0
+# Sites outside this box (Alaska, Hawaii, territories) need the insets, so
+# framing is left alone when any site falls outside it.
+CONUS_BOX = (-125.0, -66.0, 24.0, 50.0)
+
+
+def _geo_view(lats, lons) -> dict:
+    """Center and zoom that frame these sites on the albers-usa basemap."""
+    lat_lo, lat_hi = float(np.nanmin(lats)), float(np.nanmax(lats))
+    lon_lo, lon_hi = float(np.nanmin(lons)), float(np.nanmax(lons))
+    west, east, south, north = CONUS_BOX
+    if lon_lo < west or lon_hi > east or lat_lo < south or lat_hi > north:
+        # Something is off the mainland; the default view keeps its inset.
+        return {}
+
+    pad = 1 + 2 * GEO_PAD_FRAC
+    lon_span = max((lon_hi - lon_lo) * pad, 1e-6)
+    lat_span = max((lat_hi - lat_lo) * pad, 1e-6)
+    zoom = min(GEO_BASE_LON_SPAN / lon_span, GEO_BASE_LAT_SPAN / lat_span)
+    zoom = min(max(zoom * GEO_MIN_ZOOM, GEO_MIN_ZOOM), GEO_MAX_ZOOM)
+    return {
+        "center": {"lat": (lat_lo + lat_hi) / 2, "lon": (lon_lo + lon_hi) / 2},
+        "projection_scale": zoom,
+    }
+
+
 # --------------------------------------------------------------------------
 # shared layout
 # --------------------------------------------------------------------------
@@ -414,6 +452,9 @@ def map_figure(
     common = {
         "lat": "dec_lat_va",
         "lon": "dec_long_va",
+        # scope="usa" is what supplies state boundaries; Plotly draws no
+        # subunits without it. Its cost is the Alaska and Hawaii insets, which
+        # the explicit lat/lon ranges below crop back out.
         "scope": "usa",
         "custom_data": ["hover_html"],
     }
@@ -460,6 +501,7 @@ def map_figure(
         showcoastlines=False,
         showframe=False,
         fitbounds=False,
+        **_geo_view(plot["dec_lat_va"], plot["dec_long_va"]),
     )
     # The map carries a title (it has no axes to explain it), so its legend
     # docks underneath rather than fighting the title for the top band.
@@ -615,6 +657,7 @@ def to_png(fig: go.Figure, *, width: int = 1200, height: int = 700, scale: int =
         landcolor="#eef1f4",
         lakecolor="#dce7f1",
         subunitcolor="#9aa5b1",
+        countrycolor="#9aa5b1",
         bgcolor="white",
     )
     return export.to_image(format="png", width=width, height=height, scale=scale)

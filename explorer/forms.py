@@ -85,7 +85,7 @@ class FilterForm(forms.Form):
     scatter_x = forms.ChoiceField(required=False, choices=[])
     scatter_y = forms.ChoiceField(required=False, choices=[])
     log_x = forms.BooleanField(required=False, initial=True)
-    log_y = forms.BooleanField(required=False, initial=False)
+    log_y = forms.BooleanField(required=False, initial=True)
     scatter_color = forms.ChoiceField(required=False, choices=[])
 
     def __init__(self, dataset, *args, **kwargs):

@@ -103,6 +103,7 @@ window.Charts = (function () {
         landcolor: p.land,
         lakecolor: p.lake,
         subunitcolor: p.subunit,
+        countrycolor: p.subunit,
         coastlinecolor: p.subunit,
       })
     );

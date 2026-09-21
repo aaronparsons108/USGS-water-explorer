@@ -423,6 +423,9 @@ async function loadResults() {
       data.info.mode_label,
     ];
     if (data.info.months) parts.push(`months ${data.info.months.join(", ")}`);
+    if (data.info.min_paired_days) {
+      parts.push(`MI needs ${data.info.min_paired_days}+ paired days`);
+    }
     setStatus(parts.join("  ::  "), "ok");
   } catch (e) {
     if (inFlight !== token) return;

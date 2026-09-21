@@ -11,6 +11,7 @@ from __future__ import annotations
 import pandas as pd
 
 from . import cache, filters
+from .metrics import DEFAULT_MIN_PAIRED_DAYS
 from .conversions import normalize_usgs_site_no
 from .metadata import load_dataset_metadata, load_fallback_metrics_general
 from .seasons import months_for_period
@@ -34,7 +35,7 @@ def assemble(
     end=None,
     season=None,
     month=None,
-    min_paired_days: int = 30,
+    min_paired_days: int = DEFAULT_MIN_PAIRED_DAYS,
     regions=None,
     huc2s=None,
     site_query: str | None = None,
@@ -60,7 +61,7 @@ def assemble(
         "end date": bool(end),
         "season": bool(season),
         "month": bool(month),
-        "minimum paired days": int(min_paired_days) != 30,
+        "minimum paired days": int(min_paired_days) != DEFAULT_MIN_PAIRED_DAYS,
     }
 
     if mode["recompute_enabled"]:
@@ -118,6 +119,10 @@ def assemble(
         "n_total": int(n_total),
         "n_filtered": int(len(table)),
         "months": sorted(months) if months else None,
+        # Reported on every response, not just when it differs from the
+        # default: this threshold blanks MI for short records, and a reader
+        # comparing against another analysis needs to know it was applied.
+        "min_paired_days": int(min_paired_days),
     }
     return table, info
 
