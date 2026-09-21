@@ -5,27 +5,63 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf" content="{{ csrf_token }}">
+  <meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)">
   <title>{% block title %}USGS Site Explorer{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
   <link rel="stylesheet" href="{% static 'explorer/app.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}?v={% now 'U' %}">
   {% block head %}{% endblock %}
+
+  <!-- Set theme before first paint so there is no flash -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("explorer-theme");
+        if (saved === "dark" || saved === "light") {
+          document.documentElement.setAttribute("data-theme", saved);
+        }
+      } catch (e) { /* private mode: fall back to system pref */ }
+    })();
+  </script>
 </head>
 <body>
-<header class="topbar">
-  <div class="topbar-row">
-    <div>
-      <h1>USGS Site Explorer</h1>
-      <p class="subtitle">Define parameter groups &rarr; discover sites &rarr; download daily values &rarr; explore medians &amp; mutual information</p>
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <header class="topbar" role="banner">
+    <div class="topbar-row">
+      <div class="topbar-title">
+        <h1>USGS Site Explorer</h1>
+        <p class="subtitle">
+          Define parameter groups, discover sites, download daily values, then
+          explore medians and mutual information
+        </p>
+      </div>
+      <nav class="topnav" aria-label="Site navigation">
+        <a href="{% url 'datasets:list' %}">Datasets</a>
+        <button type="button" class="icon-btn" id="theme-toggle"
+                aria-label="Toggle color theme" title="Toggle color theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span id="theme-toggle-label">Dark</span>
+        </button>
+      </nav>
     </div>
-    <nav class="topnav">
-      <a href="{% url 'datasets:list' %}">Datasets</a>
-    </nav>
-  </div>
-</header>
-<div class="page">
-  {% block content %}{% endblock %}
-</div>
-<script src="{% static 'datasets/wizard.js' %}?v={% now 'U' %}"></script>
-{% block scripts %}{% endblock %}
+  </header>
+
+  <main class="page {% block page_class %}{% endblock %}" id="main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{% static 'explorer/theme.js' %}?v={% now 'U' %}"></script>
+  <script src="{% static 'datasets/wizard.js' %}?v={% now 'U' %}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,9 +1,13 @@
-"""Static per-site metadata + offline fallback metrics, from committed CSVs.
+"""Static per-site metadata and offline fallback metrics, from committed CSVs.
 
-These small CSVs (``data/``) ship with the repo, so the app always has site
-coordinates, names, region, and HUC2 without touching the 436 MB raw data. When
-raw data is absent, ``load_fallback_metrics`` serves the research1 full-window
-numbers so the app still renders.
+These small CSVs (in ``data/``) ship with the repo, so the app always has site
+coordinates, names, region and HUC2 without touching the multi-hundred-megabyte
+raw downloads. When the daily cache is absent, ``load_fallback_metrics`` serves
+the original study's full-window numbers so the demo still renders.
+
+The loaders are memoized, so every public function hands back a defensive copy:
+callers routinely add columns to what they get, and a shared frame would let
+one request's scratch column leak into the next.
 """
 
 from __future__ import annotations
@@ -24,8 +28,8 @@ from .metrics import (
     MI_NO3_DO_COL,
 )
 
-# Legacy research1 CSV columns -> generalized demo columns
-# (demo groups: g1 = NO3+NO2, g2 = Streamflow, g3 = Dissolved Oxygen).
+# Legacy study CSV columns mapped onto the generalized demo columns.
+# Demo groups: g1 = NO3+NO2, g2 = Streamflow, g3 = Dissolved Oxygen.
 LEGACY_TO_GENERAL = {
     MEDIAN_NO3_COL: "median_g1",
     "n_combined_days": "n_g1",
@@ -70,7 +74,7 @@ def _read_csv(name: str) -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def load_site_metadata() -> pd.DataFrame:
+def _site_metadata_cached() -> pd.DataFrame:
     """One row per site with coords/name/region/HUC2. Universe = merged + DO sites."""
     merged = _read_csv(MERGED_CSV)
     do_med = _read_csv(DO_MEDIAN_CSV)
@@ -110,10 +114,10 @@ def load_site_metadata() -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def load_fallback_metrics() -> pd.DataFrame:
+def _fallback_metrics_cached() -> pd.DataFrame:
     """Full-window per-site metrics from the committed CSVs (used when no raw data).
 
-    Columns use the legacy research1 names; ``load_fallback_metrics_general``
+    Columns use the legacy study names; ``load_fallback_metrics_general``
     renames them to the generalized median_g*/mi_g* scheme.
     """
     merged = _read_csv(MERGED_CSV)
@@ -160,17 +164,28 @@ def load_fallback_metrics() -> pd.DataFrame:
     return out
 
 
+def load_site_metadata() -> pd.DataFrame:
+    """One row per demo site, as a fresh copy the caller may modify."""
+    return _site_metadata_cached().copy()
+
+
+def load_fallback_metrics() -> pd.DataFrame:
+    """Full-window demo metrics under the legacy column names (fresh copy)."""
+    return _fallback_metrics_cached().copy()
+
+
 def load_fallback_metrics_general() -> pd.DataFrame:
-    """Demo fallback metrics under the generalized median_g*/mi_g* column names."""
+    """Demo fallback metrics under the generalized median_g*/mi_g* names."""
     return load_fallback_metrics().rename(columns=LEGACY_TO_GENERAL)
 
 
 def load_dataset_metadata(dataset) -> pd.DataFrame:
     """Per-site metadata for a dataset.
 
-    Demo -> legacy CSV loader (keeps huc2 names from the research1 export).
-    Extracted datasets -> CandidateSite rows; region from coords, HUC2 from the
-    inventory's huc_cd, region names from the static WBD table.
+    Demo datasets read the committed CSVs, which carry the study's own HUC2
+    region names. Extracted datasets are built from their CandidateSite rows:
+    region from coordinates, HUC2 from the inventory's huc_cd, and region names
+    from the static WBD table.
     """
     if dataset.is_demo:
         return load_site_metadata()
@@ -182,7 +197,12 @@ def load_dataset_metadata(dataset) -> pd.DataFrame:
         huc2 = s.huc2
         rows.append(
             {
-                "site_no": normalize_usgs_site_no(s.site_no),
+                # The real NWIS id, leading zeros and all, because this is what
+                # the user reads off the table and pastes into a USGS page.
+                # The metrics join canonicalizes separately (see
+                # explorer.core.service._join_metrics), so keeping the true
+                # spelling here costs nothing.
+                "site_no": str(s.site_no),
                 "station_nm": s.station_nm,
                 "dec_lat_va": s.dec_lat_va,
                 "dec_long_va": s.dec_long_va,
@@ -202,5 +222,5 @@ def load_dataset_metadata(dataset) -> pd.DataFrame:
 
 
 def clear_caches() -> None:
-    load_site_metadata.cache_clear()
-    load_fallback_metrics.cache_clear()
+    _site_metadata_cached.cache_clear()
+    _fallback_metrics_cached.cache_clear()

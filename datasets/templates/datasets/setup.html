@@ -1,58 +1,80 @@
 {% extends "datasets/base.html" %}
 {% load static %}
-{% block title %}Setup — {{ ds.name }}{% endblock %}
+{% block title %}Setup :: {{ ds.name }}{% endblock %}
 
 {% block content %}
-<div class="steps">
-  <span class="step active">1 · Parameters &amp; scope</span>
-  <span class="step">2 · Discover sites</span>
-  <span class="step">3 · Download &amp; build</span>
-  <span class="step">4 · Explore</span>
-</div>
+{% include "datasets/_steps.html" with step=1 %}
 
 <div class="panel">
-  <h2>Dataset</h2>
+  <div class="panel-head">
+    <div>
+      <h2>Scope</h2>
+      <p class="note">
+        The window and per-series minimum below are discovery filters: a site
+        only qualifies if its series overlap this window and carry at least this
+        many observations.
+      </p>
+    </div>
+  </div>
   <div class="form-grid">
     <label>Name <input type="text" id="ds-name"></label>
     <label>Start date <input type="date" id="ds-start"></label>
     <label>End date <input type="date" id="ds-end"></label>
-    <label>Min observations per series <input type="number" id="ds-mincount" min="1"></label>
+    <label>Minimum observations per series <input type="number" id="ds-mincount" min="1"></label>
   </div>
-  <label class="inline" style="margin-top:6px;"><input type="checkbox" id="ds-wells"> Exclude wells (15-digit site numbers)</label>
+  <label class="inline"><input type="checkbox" id="ds-wells"> Exclude wells (15-digit site numbers)</label>
 </div>
 
 <div class="panel">
-  <h2>Parameter groups <span class="note">— a site qualifies only if it has data in <strong>every</strong> group</span></h2>
-  <div class="sites-toolbar">
-    <button type="button" class="btn" id="load-example">Load example (nitrate research)</button>
-    <div class="spacer"></div>
-    <button type="button" class="btn" id="add-group">+ Add group</button>
+  <div class="panel-head">
+    <div>
+      <h2>Parameter groups</h2>
+      <p class="note">
+        A site qualifies only if it has data in <strong>every</strong> group.
+        Inside a group, values are normalized to the group's most common unit;
+        codes that cannot be converted are excluded and reported.
+      </p>
+    </div>
+    <div class="toolbar" style="margin:0;">
+      <button type="button" class="btn" id="load-example">Load nitrate-research example</button>
+      <button type="button" class="btn" id="add-group">Add group</button>
+    </div>
   </div>
   <div id="groups"></div>
-  <p class="note">Search by parameter code (e.g. <code>00060</code>) or name (e.g. <code>nitrate</code>).
-     Units shown per code; within a group, values are normalized to the group's most common unit —
-     codes that can't be converted are excluded and reported.</p>
+  <p class="note">
+    Search by code (<code>00060</code>) or by name (<code>nitrate</code>). Units
+    are shown per code so you can see before you commit whether a group will
+    need conversion.
+  </p>
 </div>
 
 <div class="panel">
-  <h2>Data services (site must have a matching series)</h2>
+  <h2>Data services</h2>
   <div id="services" class="checks"></div>
-  <p class="note">Only <strong>daily values (dv)</strong> are downloaded and analyzed; other services act as site filters.
-     (USGS retired the qw download endpoint in 2024.)</p>
+  <p class="note">
+    A site must have a matching series in at least one checked service. Only
+    <strong>daily values (dv)</strong> are downloaded and analyzed; the others
+    act purely as site filters. USGS retired the qw download endpoint in 2024.
+  </p>
 </div>
 
 <div class="panel">
-  <h2>States</h2>
-  <div class="sites-toolbar">
-    <button type="button" class="btn" id="states-conus">All CONUS</button>
-    <button type="button" class="btn" id="states-none">Clear</button>
-    <span class="note" id="states-count"></span>
+  <div class="panel-head">
+    <div>
+      <h2>States</h2>
+      <p class="note">Discovery runs one NWIS inventory query per state.</p>
+    </div>
+    <div class="toolbar" style="margin:0;">
+      <button type="button" class="btn" id="states-conus">All CONUS</button>
+      <button type="button" class="btn" id="states-none">Clear</button>
+      <span class="note" id="states-count"></span>
+    </div>
   </div>
   <div id="states" class="state-grid"></div>
 </div>
 
-<div class="actions" style="display:flex;gap:8px;">
-  <button type="button" class="btn primary" id="save-btn">Save &amp; continue to site discovery →</button>
+<div class="toolbar">
+  <button type="button" class="btn primary" id="save-btn">Save and continue to site discovery</button>
   <a class="btn" href="{% url 'datasets:list' %}">Back to datasets</a>
 </div>
 

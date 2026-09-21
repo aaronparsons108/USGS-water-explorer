@@ -1,9 +1,9 @@
-"""Unit conversions and column rules (ports of research1 heatmap_common + do_data_common).
+"""Unit conversions and column-selection rules for the demo (legacy) pipeline.
 
-Kept byte-for-byte faithful to the originals so explorer metrics match the
-published figures. Sources:
-  - nitro/heatmap_common.py  (NO3+NO2 codes, mg/L-as-N conversion, site-id rule)
-  - dissolved_oxygen/do_data_common.py  (00300 column select + cleaning)
+These are kept faithful to the original study so the demo dataset's metrics
+match its published figures exactly. Datasets built through the wizard use the
+general unit planner in ``datasets/units.py`` instead; nothing here runs for
+them.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ PERCFS_FACTOR_LBS_PER_DAY_TO_MG_L = 5.3937
 PERCFS_FACTOR_TONS_PER_DAY_TO_MG_L = 0.002697
 
 # --- Dissolved oxygen (00300) ----------------------------------------------
-TARGET_DO_PMCODES = frozenset({"00300"})
 NWIS_DV_SENTINELS: frozenset[float] = frozenset({-999999.0, -99999.0})
 DO_MG_L_MIN = 0.0
 DO_MG_L_MAX = 25.0
@@ -125,8 +124,6 @@ def select_do_mean_columns(cols: Iterable[str]) -> list[str]:
         for c in candidates
         if "," not in c and not any(tok in c.lower() for tok in descriptive_skip)
     ]
-    if len(simple) == 1:
-        return simple
     if simple:
         return simple
     if stat_cols:

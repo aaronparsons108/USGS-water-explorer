@@ -6,8 +6,3 @@ plotly>=5.20
 kaleido>=0.2
 pyarrow>=14.0
 dataretrieval>=1.2
-ipython>=8.0
-# Research-style publication figures (matplotlib/cartopy PNG export)
-matplotlib>=3.7
-cartopy>=0.22
-geopandas>=0.14

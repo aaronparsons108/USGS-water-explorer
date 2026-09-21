@@ -1,6 +1,6 @@
 "use strict";
 
-/* Step 3: run the download+build job, then show the unit report and explore link. */
+/* Step 3: run the download and build job, then show the unit report. */
 
 const B = JSON.parse(document.getElementById("bootstrap").textContent);
 
@@ -17,14 +17,27 @@ const els = {
 };
 
 document.getElementById("scope-line").textContent =
-  `${B.n_selected} selected sites × ${B.n_codes} parameter codes (${B.codes.join(", ")}), ${B.start} → ${B.end}. ` +
-  `Sites are fetched in small batches — large extractions can take a while.`;
+  `${B.n_selected} selected sites across ${B.n_codes} parameter codes ` +
+  `(${B.codes.join(", ")}), ${B.start} to ${B.end}. Sites are fetched in small ` +
+  `batches, so a large extraction can take a while.`;
+
+function esc(s) {
+  return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
 
 function renderUnitReport(report) {
   if (!report || !report.length) return;
   els.unitBody.innerHTML = report
-    .map((r) => `<tr><td>${r.group} · ${r.group_label || ""}</td><td>${r.code}</td>
-        <td class="action-${r.action}">${r.action}</td><td>${r.detail || ""}</td></tr>`)
+    .map(
+      (r) => `<tr>
+        <td>${esc(r.group)} ${esc(r.group_label)}</td>
+        <td>${esc(r.code)}</td>
+        <td class="action-${esc(r.action)}">${esc(r.action)}</td>
+        <td>${esc(r.detail)}</td>
+      </tr>`
+    )
     .join("");
   els.unitPanel.hidden = false;
 }
@@ -32,7 +45,7 @@ function renderUnitReport(report) {
 function markReady() {
   els.exploreLink.href = `/explorer/${B.slug}/`;
   els.readyPanel.hidden = false;
-  els.btn.textContent = "Re-download";
+  els.btn.textContent = "Download again";
   els.btn.disabled = false;
 }
 
@@ -44,14 +57,15 @@ function attachPolling() {
     datasetId: B.id,
     kind: "download",
     onTick: (job) => renderJobProgress(job, els.bar, els.msg, els.log),
-    onDone: async (job) => {
+    onDone: (job) => {
       renderJobProgress(job, els.bar, els.msg, els.log);
-      // unit report lives on the dataset; easiest refresh is a reload
+      // The unit report lives on the dataset row; a reload is the simplest
+      // way to pick it up along with the new status.
       window.location.reload();
     },
     onError: (job) => {
       renderJobProgress(job, els.bar, els.msg, els.log);
-      showError(job.message || "Download failed — check the log, then retry.");
+      showError(job.message || "Download failed. Check the log, then retry.");
       els.btn.disabled = false;
       els.btn.textContent = "Retry download";
     },
@@ -68,7 +82,7 @@ els.btn.onclick = async () => {
   }
 };
 
-/* On load: resume, or show results for a ready dataset. */
+/* On load: resume a running job, or show the result of a finished one. */
 if (B.status === "downloading") {
   attachPolling();
 } else if (B.status === "ready") {

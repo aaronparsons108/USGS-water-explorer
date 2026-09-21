@@ -1,6 +1,6 @@
 "use strict";
 
-/* Shared wizard helpers: CSRF-aware fetch + job polling. */
+/* Shared wizard helpers: CSRF-aware fetch, error surfacing, and job polling. */
 
 function csrfToken() {
   const m = document.querySelector('meta[name="csrf"]');
@@ -14,7 +14,11 @@ async function postJSON(url, body) {
     body: body === undefined ? null : JSON.stringify(body),
   });
   let data = {};
-  try { data = await resp.json(); } catch (e) { /* non-JSON (e.g. redirect) */ }
+  try {
+    data = await resp.json();
+  } catch (e) {
+    /* non-JSON response, e.g. a redirect */
+  }
   if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
   return data;
 }
@@ -36,6 +40,7 @@ function showError(msg) {
   }
   box.textContent = msg;
   box.hidden = false;
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function clearError() {
@@ -44,7 +49,7 @@ function clearError() {
 }
 
 /*
- * Poll the dataset job endpoint every 2s.
+ * Poll the dataset job endpoint every two seconds.
  * opts: {datasetId, kind, onTick(job, datasetStatus), onDone(job, status), onError(job)}
  * Returns a stop() function.
  */
@@ -67,12 +72,14 @@ function pollJob(opts) {
         return;
       }
     } catch (e) {
-      /* transient poll failure — keep going */
+      /* transient poll failure: keep going, the next tick usually recovers */
     }
     setTimeout(tick, 2000);
   }
   tick();
-  return () => { stopped = true; };
+  return () => {
+    stopped = true;
+  };
 }
 
 function renderJobProgress(job, barEl, msgEl, logEl) {

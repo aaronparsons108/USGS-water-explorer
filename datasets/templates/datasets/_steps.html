@@ -1,0 +1,17 @@
+{% comment %}
+Shared step rail. `step` is 1-4; completed steps link back so a user can
+revisit an earlier decision without retracing the whole flow.
+{% endcomment %}
+<nav class="steps" aria-label="Extraction progress">
+  {% if step > 1 and not ds.is_demo %}<a class="step done" href="{% url 'datasets:setup' ds.id %}">1. Parameters and scope</a>
+  {% else %}<span class="step {% if step == 1 %}active{% endif %}">1. Parameters and scope</span>{% endif %}
+
+  {% if step > 2 and not ds.is_demo %}<a class="step done" href="{% url 'datasets:sites' ds.id %}">2. Discover sites</a>
+  {% else %}<span class="step {% if step == 2 %}active{% endif %}{% if step > 2 %} done{% endif %}">2. Discover sites</span>{% endif %}
+
+  {% if step > 3 and not ds.is_demo %}<a class="step done" href="{% url 'datasets:download' ds.id %}">3. Download and build</a>
+  {% else %}<span class="step {% if step == 3 %}active{% endif %}{% if step > 3 %} done{% endif %}">3. Download and build</span>{% endif %}
+
+  {% if ds.status == "ready" %}<a class="step {% if step == 4 %}active{% endif %}" href="/explorer/{{ ds.slug }}/">4. Explore</a>
+  {% else %}<span class="step">4. Explore</span>{% endif %}
+</nav>

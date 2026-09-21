@@ -1,13 +1,171 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Landing Page</title>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)">
+  <title>USGS Site Explorer</title>
 
-    </head>
-    <body>
-        <div class="card">
-            <h1>TEST</h1>
-        </div>
-    </body>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="{% static 'explorer/app.css' %}">
+  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}">
+
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("explorer-theme");
+        if (saved === "dark" || saved === "light") {
+          document.documentElement.setAttribute("data-theme", saved);
+        }
+      } catch (e) { /* private mode: fall back to system pref */ }
+    })();
+  </script>
+
+  <style>
+    /* Landing-only styles. One-off by nature, so they stay here rather than
+       adding weight to the shared design system. */
+    .hero {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 72px 24px 32px;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-tint);
+      padding: 5px 12px;
+      border-radius: var(--radius-pill);
+      margin-bottom: 18px;
+    }
+    .hero h1 {
+      font-size: clamp(30px, 5vw, 46px);
+      line-height: 1.1;
+      letter-spacing: -0.025em;
+      margin: 0 0 16px;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero p.lede {
+      font-size: 18px;
+      color: var(--ink-2);
+      max-width: 60ch;
+      margin: 0 auto 30px;
+      line-height: 1.55;
+    }
+    .hero-cta { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .hero-cta .btn { padding: 11px 22px; font-size: var(--fs-md); }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 18px;
+      max-width: 1120px;
+      margin: 32px auto 48px;
+      padding: 0 24px;
+    }
+    .feature {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      box-shadow: var(--shadow-sm);
+    }
+    .feature .num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .feature h3 { margin: 8px 0 6px; font-size: 15px; }
+    .feature p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.55; }
+
+    footer.landing-footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 12.5px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }
+    footer.landing-footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="topbar" role="banner">
+    <div class="topbar-row">
+      <div class="topbar-title">
+        <h1>USGS Site Explorer</h1>
+        <p class="subtitle">Correlation research across USGS parameter codes, without writing code</p>
+      </div>
+      <nav class="topnav" aria-label="Site navigation">
+        <a href="/datasets/">Datasets</a>
+        <a href="/explorer/">Open explorer</a>
+        <button type="button" class="icon-btn" id="theme-toggle"
+                aria-label="Toggle color theme" title="Toggle color theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span id="theme-toggle-label">Dark</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <span class="hero-eyebrow">Water data &middot; daily values &middot; mutual information</span>
+      <h1>Find out how <span class="accent">streamflow</span>, <span class="accent">nutrients</span> and any other <span class="accent">USGS parameter</span> move together.</h1>
+      <p class="lede">
+        Define your parameter groups, find every U.S. site with data in
+        <em>all</em> of them, and pull the daily values in one pass. Then explore
+        per-site medians and mutual information across seasons, basins and time
+        windows, recomputed as you change your mind.
+      </p>
+      <div class="hero-cta">
+        <a href="/explorer/" class="btn primary">Explore the demo dataset</a>
+        <a href="/datasets/" class="btn">Start a new extraction</a>
+      </div>
+    </section>
+
+    <section class="features" aria-label="How it works">
+      <article class="feature">
+        <span class="num">1 &middot; Define</span>
+        <h3>Parameter groups</h3>
+        <p>Pick from 19,000+ USGS codes with a searchable picker. Set 2 to 5 groups; a site qualifies only when it has data in every one.</p>
+      </article>
+      <article class="feature">
+        <span class="num">2 &middot; Discover</span>
+        <h3>Site inventory</h3>
+        <p>State-by-state NWIS queries narrow to sites with real coverage. Filter by basin, record length or observation count, then choose what to keep.</p>
+      </article>
+      <article class="feature">
+        <span class="num">3 &middot; Download</span>
+        <h3>Daily values</h3>
+        <p>Fetched through dataretrieval with unit normalization and an honest report. Loads and concentrations are never quietly averaged together.</p>
+      </article>
+      <article class="feature">
+        <span class="num">4 &middot; Explore</span>
+        <h3>Dependence, not just plotting</h3>
+        <p>Medians, k-NN mutual information and the bounded normalized version recompute on the fly for any window, season or region.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    Built for hydrology research &middot; powered by
+    <a href="https://github.com/DOI-USGS/dataretrieval-python">DOI-USGS/dataretrieval-python</a>
+  </footer>
+
+  <script src="{% static 'explorer/theme.js' %}"></script>
+</body>
 </html>

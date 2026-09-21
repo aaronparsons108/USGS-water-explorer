@@ -1,13 +1,22 @@
 """Dataset models: an extraction is a Dataset with ParameterGroups, discovered
 CandidateSites, and background Jobs.
 
-Metric naming convention (used by the builder, metrics, and explorer):
-  median_g<pos>, n_g<pos>            per-group median / observation days
-  mi_g<i>_g<j>, n_paired_g<i>_g<j>   pairwise mutual information (i < j)
+Metric naming convention, shared by the builder, the metrics module and the
+explorer:
+
+    median_g<pos>, n_g<pos>              per-group median and observation days
+    mi_g<i>_g<j>, n_paired_g<i>_g<j>     pairwise mutual information (i < j)
+    nmi_g<i>_g<j>                        normalized MI, bounded 0 to 1
+
+``Dataset.metric_schema()`` is the single source of truth for those names and
+their human labels: the form, the figures, the table and the CSV all read it,
+so a dataset with different groups reshapes the whole UI without any of those
+layers knowing about parameter codes.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
@@ -52,9 +61,10 @@ class Dataset(models.Model):
     # Unit-normalization report from the build step: list of dicts
     # {"group": pos, "code": ..., "action": "kept|converted|excluded", "detail": ...}
     unit_report = models.JSONField(default=list, blank=True)
-    # Demo-parity quirk: {"i,j": gate_pos} — when pairing groups i & j for MI,
-    # first restrict group i's days to those also paired with group gate_pos.
-    # Research1 paired DO against the flow-gated NO3 series; new datasets: {}.
+    # Demo-parity rules, keyed "i,j". When pairing groups i and j for MI, a
+    # "gate" first restricts group i's days to those also paired with the gate
+    # group, and "x" pins which series the estimator receives as X. The original
+    # study paired DO against the flow-gated NO3 series; wizard datasets use {}.
     pairing_gates = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -99,7 +109,7 @@ class Dataset(models.Model):
         """Column names + labels derived from this dataset's groups.
 
         Returns {"columns": [...], "labels": {col: label}, "numeric": [...],
-                 "medians": [...], "mis": [...], "pairs": [(i, j), ...]}.
+        "medians": [...], "mis": [...], "nmis": [...], "pairs": [(i, j), ...]}.
         """
         groups = self.groups_ordered()
         labels: dict[str, str] = {}
@@ -110,7 +120,7 @@ class Dataset(models.Model):
             medians.append(med)
             counts.append(cnt)
             labels[med] = f"Median {g.label}" + (f" ({unit})" if unit else "")
-            labels[cnt] = f"# {g.label} days"
+            labels[cnt] = f"{g.label} days"
         pairs = list(combinations([g.position for g in groups], 2))
         by_pos = {g.position: g for g in groups}
         for i, j in pairs:
@@ -118,9 +128,12 @@ class Dataset(models.Model):
             mis.append(mi)
             nmis.append(nmi)
             paired.append(np_)
-            labels[mi] = f"MI({by_pos[i].label}; {by_pos[j].label}) (nats)"
-            labels[nmi] = f"Normalized MI I({by_pos[i].label}; {by_pos[j].label})/H({by_pos[i].label})"
-            labels[np_] = f"# paired days ({by_pos[i].label}, {by_pos[j].label})"
+            a, b = by_pos[i].label, by_pos[j].label
+            labels[mi] = f"MI: {a} vs {b} (nats)"
+            # U(A|B) = I(A;B)/H(A) reads as "how much of A's uncertainty B
+            # explains", which is far easier to act on than the formula.
+            labels[nmi] = f"Normalized MI: {a} explained by {b}"
+            labels[np_] = f"Paired days: {a} and {b}"
         numeric = medians + mis + nmis + counts + paired
         meta_cols = [
             "site_no", "station_nm", "location_type", "huc2", "huc2_region_name",
@@ -162,12 +175,25 @@ class ParameterGroup(models.Model):
         return [p["code"] for p in self.pmcodes]
 
     def display_unit(self) -> str:
-        """Most common unit among member codes (the group's target unit)."""
-        units = [str(p.get("unit") or "").strip() for p in self.pmcodes]
-        units = [u for u in units if u]
-        if not units:
+        """The group's target unit, spelled as its members spell it.
+
+        Codes are counted case-insensitively so "mg/L as N" and "mg/l as N" are
+        one unit, matching what ``datasets.units.plan_group_units`` decides;
+        counting them separately here would let a column header advertise a
+        unit the values were never converted to. Ties break alphabetically so
+        the label is stable across restarts.
+        """
+        raw = [str(p.get("unit") or "").strip() for p in self.pmcodes]
+        raw = [u for u in raw if u]
+        if not raw:
             return ""
-        return max(set(units), key=units.count)
+        counts = Counter(u.lower() for u in raw)
+        top = max(counts.values())
+        winner = sorted(u for u, n in counts.items() if n == top)[0]
+        # Report the most common original spelling of the winning unit.
+        spellings = Counter(u for u in raw if u.lower() == winner)
+        best = max(spellings.values())
+        return sorted(u for u, n in spellings.items() if n == best)[0]
 
 
 class CandidateSite(models.Model):
@@ -224,5 +250,5 @@ class Job(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    def append_log(self, line: str) -> None:
-        self.log = (self.log + "\n" + line).strip()
+    def __str__(self) -> str:
+        return f"{self.dataset.slug} {self.kind} ({self.status})"

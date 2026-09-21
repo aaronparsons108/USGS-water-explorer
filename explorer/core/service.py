@@ -1,8 +1,9 @@
 """Orchestration: assemble the filtered per-site table for a dataset.
 
 Joins the dataset's site metadata with recomputed (or demo-fallback) metrics,
-applies user filters, and reports which mode was used. Column names and labels
-come from ``Dataset.metric_schema()`` — median_g<pos>, mi_g<i>_g<j>, etc.
+applies the user's filters, and reports which mode was used. Column names and
+labels come from ``Dataset.metric_schema()``: median_g<pos>, mi_g<i>_g<j>, and
+so on.
 """
 
 from __future__ import annotations
@@ -10,16 +11,18 @@ from __future__ import annotations
 import pandas as pd
 
 from . import cache, filters
+from .conversions import normalize_usgs_site_no
 from .metadata import load_dataset_metadata, load_fallback_metrics_general
 from .seasons import months_for_period
 
+# Internal join key, dropped before the table is returned.
+_JOIN = "_site_key"
+
 
 def data_mode(dataset) -> dict:
-    """What data backend is available for this dataset right now."""
-    daily = cache.dataset_daily_available(dataset)
+    """Which data backend is available for this dataset right now."""
     return {
-        "recompute_enabled": daily,
-        "raw_available": cache.raw_sitedata_available() if dataset.is_demo else True,
+        "recompute_enabled": cache.dataset_daily_available(dataset),
         "is_demo": dataset.is_demo,
     }
 
@@ -37,14 +40,28 @@ def assemble(
     site_query: str | None = None,
     ranges=None,
 ) -> tuple[pd.DataFrame, dict]:
-    """Build the filtered per-site table + info dict (mode, warnings, counts)."""
+    """Build the filtered per-site table plus an info dict.
+
+    The info dict carries everything the front end needs to explain the result:
+    which compute mode ran, how many sites survived filtering, which months
+    were included, and any warnings about controls that could not take effect.
+    """
     schema = dataset.metric_schema()
     meta = load_dataset_metadata(dataset)
     mode = data_mode(dataset)
     warnings: list[str] = []
 
-    wants_recompute = bool(start or end or season or month)
     months = months_for_period(season, month)
+    # Controls that only mean something when metrics are recomputed from the
+    # daily tables. If recompute is off, every one of these is inert, and
+    # saying so is better than silently ignoring the user.
+    time_controls = {
+        "start date": bool(start),
+        "end date": bool(end),
+        "season": bool(season),
+        "month": bool(month),
+        "minimum paired days": int(min_paired_days) != 30,
+    }
 
     if mode["recompute_enabled"]:
         metrics = cache.compute_metrics(
@@ -58,24 +75,26 @@ def assemble(
     elif dataset.is_demo:
         metrics = load_fallback_metrics_general()
         used_mode = "fallback"
-        if wants_recompute:
+        inert = [name for name, active in time_controls.items() if active]
+        if inert:
             warnings.append(
-                "Date-range and season filters need the parsed demo cache. Set "
-                "NITRO_DATA_ROOT to your nitro-research checkout and run "
-                "`python manage.py build_cache`. Showing full-window values."
+                f"Showing full-window values: {_join(inert)} cannot be applied "
+                "without the parsed daily cache. Point NITRO_DATA_ROOT at a "
+                "nitro-research checkout and run `python manage.py build_cache` "
+                "to enable them."
             )
     else:
         metrics = pd.DataFrame(columns=["site_no"])
         used_mode = "missing"
         warnings.append(
-            "This dataset has no built daily tables yet — run the download step."
+            "This dataset has no daily tables yet, so every metric is blank. "
+            "Run the download step to build them."
         )
 
-    metrics["site_no"] = metrics.get("site_no", pd.Series(dtype=str)).astype(str)
-    meta["site_no"] = meta["site_no"].astype(str)
-    table = meta.merge(metrics, on="site_no", how="left")
+    table = _join_metrics(meta, metrics)
 
-    # Column order: schema meta+metrics, with legacy extras (site_export_id) kept.
+    # Column order comes from the schema; legacy extras (site_export_id) are
+    # kept right after the site number where a reader expects an identifier.
     cols = list(schema["columns"])
     if "site_export_id" in table.columns:
         cols = cols[:1] + ["site_export_id"] + cols[1:]
@@ -93,6 +112,7 @@ def assemble(
 
     info = {
         "mode": used_mode,
+        "mode_label": _MODE_LABELS.get(used_mode, used_mode),
         "recompute_enabled": mode["recompute_enabled"],
         "warnings": warnings,
         "n_total": int(n_total),
@@ -100,3 +120,48 @@ def assemble(
         "months": sorted(months) if months else None,
     }
     return table, info
+
+
+def _join_metrics(meta: pd.DataFrame, metrics: pd.DataFrame) -> pd.DataFrame:
+    """Attach metrics to site metadata on a canonical site key.
+
+    The two sides spell site numbers differently and always have. Metadata runs
+    through ``normalize_usgs_site_no`` (leading zeros stripped, so the demo's
+    several CSV exports agree with each other), while a wizard dataset's daily
+    tables carry the full NWIS id straight from ``usgs_<id>_all_obs.csv``.
+    Joining on the raw column therefore matched nothing for any site whose id
+    begins with a zero, which is most of the eastern US, and every median and
+    MI came back blank with no error anywhere.
+
+    Normalizing into a separate key fixes the join without rewriting the
+    displayed id: the table keeps showing the site number the user would
+    actually paste into the USGS site page.
+    """
+    meta = meta.copy()
+    meta[_JOIN] = meta["site_no"].astype(str).map(normalize_usgs_site_no)
+
+    if metrics is None or metrics.empty or "site_no" not in metrics.columns:
+        # Nothing to attach; the caller still needs the metadata frame back so
+        # the metric columns can be filled in as missing further down.
+        return meta.drop(columns=[_JOIN])
+
+    metrics = metrics.copy()
+    metrics[_JOIN] = metrics["site_no"].astype(str).map(normalize_usgs_site_no)
+    metrics = metrics.drop(columns=["site_no"])
+    # A duplicate key would fan the metadata row out into several table rows.
+    metrics = metrics.drop_duplicates(subset=[_JOIN], keep="first")
+
+    return meta.merge(metrics, on=_JOIN, how="left").drop(columns=[_JOIN])
+
+
+_MODE_LABELS = {
+    "recompute": "recomputed from daily data",
+    "fallback": "full-window values",
+    "missing": "no daily data",
+}
+
+
+def _join(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + " and " + items[-1]

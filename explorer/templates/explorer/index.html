@@ -4,174 +4,253 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ ds.name }} — USGS Site Explorer</title>
+  <meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)">
+  <title>{{ ds.name }} :: USGS Site Explorer</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
   <link rel="stylesheet" href="{% static 'explorer/app.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'datasets/wizard.css' %}?v={% now 'U' %}">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+  <!-- Set theme before first paint so there is no flash of the wrong palette -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("explorer-theme");
+        if (saved === "dark" || saved === "light") {
+          document.documentElement.setAttribute("data-theme", saved);
+        }
+      } catch (e) { /* localStorage unavailable: fall back to system pref */ }
+    })();
+  </script>
 </head>
 <body>
-<header class="topbar">
-  <div class="topbar-row">
-    <div>
-      <h1>{{ ds.name }}</h1>
-      <p class="subtitle">Per-site medians &amp; mutual information &mdash;
-        {% for g in ds.groups_ordered %}{{ g.label }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}</p>
+  <a href="#results" class="skip-link">Skip to results</a>
+
+  <header class="topbar" role="banner">
+    <div class="topbar-row">
+      <div class="topbar-title">
+        <h1>{{ ds.name }}</h1>
+        <p class="subtitle">
+          Per-site medians and mutual information across
+          {% for g in ds.groups_ordered %}<strong>{{ g.label }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+      </div>
+      <nav class="topnav" aria-label="Site navigation">
+        <a href="/datasets/">Datasets</a>
+        {% if not ds.is_demo %}<a href="/datasets/{{ ds.id }}/download/">Extraction steps</a>{% endif %}
+        <button type="button" class="icon-btn" id="theme-toggle"
+                aria-label="Toggle color theme" title="Toggle color theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span id="theme-toggle-label">Dark</span>
+        </button>
+      </nav>
     </div>
-    <nav class="topnav">
-      <a href="/datasets/">Datasets</a>
-      {% if not ds.is_demo %}<a href="/datasets/{{ ds.id }}/download/">Extraction steps</a>{% endif %}
-    </nav>
+  </header>
+
+  <div class="layout">
+    <!-- ============ CHART CONTROLS + FILTER SIDEBAR ============ -->
+    <aside class="sidebar" aria-label="Filters and chart controls">
+      <div class="sidebar-head">
+        <h2>Controls</h2>
+        <button type="button" class="link-btn" id="reset-btn">Reset all</button>
+      </div>
+
+      <form id="filter-form">
+        <details class="fset" open>
+          <summary><span class="fset-title">Chart controls</span></summary>
+          <div class="fset-body">
+            <p class="hint">What the map and scatter show. These change the
+              view only; the filters below change which sites are in it.</p>
+            <h3>Map</h3>
+            <label class="stack">Color sites by {{ form.map_color }}</label>
+            <label class="stack">Color scale {{ form.map_palette }}</label>
+            <div id="palette-preview" class="palette-preview" aria-hidden="true"></div>
+            <label class="stack">Value scaling {{ form.color_scale }}</label>
+            <p class="hint" id="scale-note" hidden>
+              Log scaling needs strictly positive values, so it applies to
+              medians only. Mutual information includes exactly zero, and a log
+              scale would drop those sites rather than show them.
+            </p>
+            <p class="hint">
+              Low to high, left to right. <strong>Auto</strong> uses viridis for
+              mutual information and plasma for measured values, so the two kinds
+              of metric stay visually distinct. Ignored when coloring by region,
+              which always uses the fixed region colors.
+            </p>
+
+            <h3>Scatter</h3>
+            <label class="stack">X axis {{ form.scatter_x }}</label>
+            <label class="stack">Y axis {{ form.scatter_y }}</label>
+            <div class="row two">
+              <label class="inline">{{ form.log_x }} log X</label>
+              <label class="inline">{{ form.log_y }} log Y</label>
+            </div>
+            <p class="hint" id="log-note" hidden>
+              Log scaling applies to median values only. Mutual information
+              includes exactly zero, which a log axis would silently drop.
+            </p>
+            <label class="stack">Color points by {{ form.scatter_color }}</label>
+          </div>
+        </details>
+        <details class="fset" open>
+          <summary>
+            <span class="fset-title">Time window</span>
+            <span class="badge {% if mode.recompute_enabled %}badge-ok{% else %}badge-off{% endif %}"
+                  title="{% if mode.recompute_enabled %}Metrics are re-derived from the daily tables whenever these change.{% else %}Daily tables are unavailable, so these controls cannot take effect.{% endif %}">
+              {% if mode.recompute_enabled %}live{% else %}inactive{% endif %}
+            </span>
+            <span class="fset-count" data-count-for="time" hidden></span>
+          </summary>
+          <div class="fset-body">
+            <p class="hint">
+              Changing any of these re-derives every median and mutual-information
+              value from the daily data, usually in well under a second.
+            </p>
+            <div class="row two">
+              <label>Start date {{ form.start_date }}</label>
+              <label>End date {{ form.end_date }}</label>
+            </div>
+            <div class="row two">
+              <label>Season {{ form.season }}</label>
+              <label>Month {{ form.month }}</label>
+            </div>
+            <label>
+              Minimum paired days to estimate MI
+              {{ form.min_paired_days }}
+            </label>
+            <p class="hint">
+              Sites under this threshold show a blank MI but stay in the table,
+              since their medians are still valid. To remove them entirely, set a
+              minimum under <strong>Thresholds</strong>.
+            </p>
+          </div>
+        </details>
+
+        <details class="fset" open>
+          <summary>
+            <span class="fset-title">Location</span>
+            <span class="fset-count" data-count-for="location" hidden></span>
+          </summary>
+          <div class="fset-body">
+            <label class="stack">Site search {{ form.site_query }}</label>
+            {% if has_regions %}
+              <div class="check-group">
+                <div class="check-group-head">
+                  <span class="field-label">Region</span>
+                  <button type="button" class="link-btn" data-clear-group="regions">Clear</button>
+                </div>
+                <div class="checks">{{ form.regions }}</div>
+              </div>
+            {% endif %}
+            {% if has_huc2 %}
+              <div class="check-group">
+                <div class="check-group-head">
+                  <span class="field-label">HUC2 basin</span>
+                  <button type="button" class="link-btn" data-clear-group="huc2">Clear</button>
+                </div>
+                <p class="hint">
+                  USGS hydrologic unit codes: the 22 top-level watersheds. Filter
+                  to isolate a single basin, for example 07 Upper Mississippi.
+                </p>
+                <div class="checks checks-scroll">{{ form.huc2 }}</div>
+              </div>
+            {% endif %}
+          </div>
+        </details>
+
+        {% for block in range_blocks %}
+        <details class="fset">
+          <summary>
+            <span class="fset-title">{{ block.title }}</span>
+            <span class="fset-count" data-count-for="{{ block.key }}" hidden></span>
+          </summary>
+          <div class="fset-body">
+            <p class="hint">{{ block.hint }}</p>
+            {% for r in block.rows %}
+              <div class="range-row">
+                <span class="range-label" title="{{ r.label }}">{{ r.label }}</span>
+                <span class="range-inputs">
+                  {{ r.min }}{% if r.max %}<em>to</em>{{ r.max }}{% else %}<em>min</em>{% endif %}
+                </span>
+              </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endfor %}
+
+      </form>
+    </aside>
+
+    <!-- ==================== RESULTS ==================== -->
+    <main class="results" id="results" tabindex="-1">
+      <div class="results-head">
+        <div id="status" class="status" role="status" aria-live="polite" data-state="loading">
+          Loading
+        </div>
+        <div class="results-actions">
+          <a id="dl-csv" class="btn small" href="#">Download CSV</a>
+        </div>
+      </div>
+
+      <div id="chips" class="chips" aria-label="Active filters" hidden></div>
+      <div id="banner" class="banner" role="alert" hidden></div>
+      <div id="form-errors" class="banner banner-error" role="alert" hidden></div>
+
+      <section class="card" aria-labelledby="hd-map">
+        <div class="card-head">
+          <h2 id="hd-map">Map</h2>
+          <div class="card-actions">
+            <span class="muted" id="map-caption"></span>
+            <a id="dl-map" class="btn small ghost" href="#">PNG</a>
+          </div>
+        </div>
+        <div id="map-div" class="plot" role="img" aria-label="Bubble map of sites across the United States"></div>
+      </section>
+
+      <section class="card" aria-labelledby="hd-scatter">
+        <div class="card-head">
+          <h2 id="hd-scatter">Scatter</h2>
+          <div class="card-actions">
+            <span class="muted" id="scatter-caption"></span>
+            <a id="dl-scatter" class="btn small ghost" href="#">PNG</a>
+          </div>
+        </div>
+        <div id="scatter-div" class="plot" role="img" aria-label="Scatter plot of the two selected metrics"></div>
+      </section>
+
+      <section class="card" aria-labelledby="hd-sites">
+        <div class="card-head">
+          <h2 id="hd-sites">Sites <span id="row-count" class="muted"></span></h2>
+          <div class="card-actions">
+            <span class="muted">Click a column header to sort</span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="results-table"><thead></thead><tbody></tbody></table>
+        </div>
+      </section>
+    </main>
   </div>
-</header>
 
-<div class="layout">
-  <!-- ============ FILTER SIDEBAR ============ -->
-  <aside class="sidebar">
-    <form id="filter-form">
-      <section class="fieldset">
-        <h2>Time window
-          <span class="badge {% if mode.recompute_enabled %}badge-ok{% else %}badge-off{% endif %}">
-            {% if mode.recompute_enabled %}recompute on{% else %}recompute off{% endif %}
-          </span>
-        </h2>
-        <p class="hint">Date / season filters re-derive medians &amp; MI from daily data.</p>
-        <div class="row two">
-          <label>Start date {{ form.start_date }}</label>
-          <label>End date {{ form.end_date }}</label>
-        </div>
-        <div class="row two">
-          <label>Season {{ form.season }}</label>
-          <label>Month {{ form.month }}</label>
-        </div>
-        <label>Min paired days to estimate MI {{ form.min_paired_days }}</label>
-        <p class="hint">Sites below this show &mdash; for MI but stay listed
-           (their medians are still valid). To drop them from the table and map,
-           set a &ldquo;# paired days&rdquo; minimum under
-           <strong>Value &amp; MI ranges &rarr; Minimum observation counts</strong>.</p>
-      </section>
-
-      <section class="fieldset">
-        <h2>Location</h2>
-        <label>Region</label>
-        <div class="checks">{{ form.regions }}</div>
-        <label>HUC2 region</label>
-        <div class="checks">{{ form.huc2 }}</div>
-        <label>Site search (number or name) {{ form.site_query }}</label>
-      </section>
-
-      <section class="fieldset">
-        <h2>Value &amp; MI ranges</h2>
-        {% for r in range_rows %}
-          <div class="range-row">
-            <span class="range-label">{{ r.label }}</span>
-            <span class="range-inputs">{{ r.min }}<em>to</em>{{ r.max }}</span>
-          </div>
-        {% endfor %}
-        <h3>Minimum observation counts</h3>
-        {% for r in count_rows %}
-          <div class="range-row">
-            <span class="range-label">{{ r.label }}</span>
-            <span class="range-inputs">{{ r.min }}<em>min</em></span>
-          </div>
-        {% endfor %}
-      </section>
-
-      <section class="fieldset">
-        <h2>Visualize</h2>
-        <p class="hint">These drive both the interactive charts and the
-           publication-style figures on the right.</p>
-        <label>Map — color bubbles by {{ form.map_color }}</label>
-        <h3>Scatter axes</h3>
-        <div class="row two">
-          <label>X axis {{ form.scatter_x }}</label>
-          <label>Y axis {{ form.scatter_y }}</label>
-        </div>
-        <div class="row two">
-          <label class="inline">{{ form.log_x }} log X</label>
-          <label class="inline">{{ form.log_y }} log Y</label>
-        </div>
-        <label>Interactive scatter color {{ form.scatter_color }}</label>
-      </section>
-
-      <div class="actions">
-        <button type="submit" class="primary">Apply filters</button>
-        <button type="reset" class="secondary" id="reset-btn">Reset</button>
-      </div>
-    </form>
-  </aside>
-
-  <!-- ============ RESULTS ============ -->
-  <main class="results">
-    <div id="banner" class="banner" hidden></div>
-    <div id="status" class="status">Loading&hellip;</div>
-
-    <div class="tabbar">
-      <button type="button" class="tab active" data-tab="interactive">Interactive</button>
-      <button type="button" class="tab" data-tab="publication">Publication figures</button>
-    </div>
-
-    <!-- Interactive (Plotly) -->
-    <div class="tab-panel" data-panel="interactive">
-      <section class="card">
-        <div class="card-head">
-          <h2>Map <span class="muted">— hover &amp; zoom</span></h2>
-          <a id="dl-map" class="dl" href="#">PNG</a>
-        </div>
-        <div id="map-div" class="plot"></div>
-      </section>
-      <section class="card">
-        <div class="card-head">
-          <h2>Scatter</h2>
-          <a id="dl-scatter" class="dl" href="#">PNG</a>
-        </div>
-        <div id="scatter-div" class="plot plot-square"></div>
-      </section>
-    </div>
-
-    <!-- Publication (matplotlib / cartopy, research style) -->
-    <div class="tab-panel" data-panel="publication" hidden>
-      <p class="hint pub-note">Research-style figures matching the nitro-research study.
-        The <strong>map</strong> uses your “Map — color bubbles by” metric (a region
-        selection falls back to the first mutual-information metric); the
-        <strong>scatter</strong> uses your X/Y axes, colored by HUC-2.</p>
-      <section class="card">
-        <div class="card-head">
-          <h2>Research map</h2>
-          <a id="dl-research-map" class="dl" href="#">Download PNG</a>
-        </div>
-        <div class="research-wrap"><img id="research-map-img" class="research-img" alt="research map"></div>
-      </section>
-      <section class="card">
-        <div class="card-head">
-          <h2>Research scatter</h2>
-          <a id="dl-research-scatter" class="dl" href="#">Download PNG</a>
-        </div>
-        <div class="research-wrap"><img id="research-scatter-img" class="research-img research-img-square" alt="research scatter"></div>
-      </section>
-    </div>
-
-    <section class="card">
-      <div class="card-head">
-        <h2>Sites <span id="row-count" class="muted"></span></h2>
-        <a id="dl-csv" class="dl" href="#">Download CSV</a>
-      </div>
-      <div class="table-wrap">
-        <table id="results-table"><thead></thead><tbody></tbody></table>
-      </div>
-    </section>
-  </main>
-</div>
-
-<script>
-  window.EXPLORER_URLS = {
-    results: "{% url 'explorer:results' ds.slug %}",
-    csv: "{% url 'explorer:download_csv' ds.slug %}",
-    mapPng: "{% url 'explorer:download_png' ds.slug 'map' %}",
-    scatterPng: "{% url 'explorer:download_png' ds.slug 'scatter' %}",
-    researchMap: "{% url 'explorer:research_png' ds.slug 'map' %}",
-    researchScatter: "{% url 'explorer:research_png' ds.slug 'scatter' %}",
-  };
-</script>
-<script src="{% static 'explorer/app.js' %}?v={% now 'U' %}"></script>
+  {{ palette_gradients|json_script:"palette-gradients" }}
+  <script>
+    window.EXPLORER_URLS = {
+      results: "{% url 'explorer:results' ds.slug %}",
+      csv: "{% url 'explorer:download_csv' ds.slug %}",
+      mapPng: "{% url 'explorer:download_png' ds.slug 'map' %}",
+      scatterPng: "{% url 'explorer:download_png' ds.slug 'scatter' %}",
+    };
+  </script>
+  <script src="{% static 'explorer/theme.js' %}?v={% now 'U' %}"></script>
+  <script src="{% static 'explorer/charts.js' %}?v={% now 'U' %}"></script>
+  <script src="{% static 'explorer/app.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

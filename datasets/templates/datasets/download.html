@@ -1,40 +1,51 @@
 {% extends "datasets/base.html" %}
 {% load static %}
-{% block title %}Download — {{ ds.name }}{% endblock %}
+{% block title %}Download :: {{ ds.name }}{% endblock %}
 
 {% block content %}
-<div class="steps">
-  <span class="step done">1 · Parameters &amp; scope</span>
-  <span class="step done">2 · Discover sites</span>
-  <span class="step active">3 · Download &amp; build</span>
-  <span class="step">4 · Explore</span>
-</div>
+{% include "datasets/_steps.html" with step=3 %}
 
 <div class="panel">
-  <h2>{{ ds.name }} — download daily values</h2>
-  <p class="note" id="scope-line"></p>
-  <div class="sites-toolbar">
+  <div class="panel-head">
+    <div>
+      <h2>Download daily values</h2>
+      <p class="note" id="scope-line"></p>
+    </div>
     <button type="button" class="btn primary" id="download-btn">Start download</button>
-    <span class="note" id="job-msg"></span>
   </div>
+  <p class="note" id="job-msg"></p>
   <div class="progress-wrap" id="progress-wrap" hidden><div class="progress-bar" id="progress-bar"></div></div>
   <pre class="job-log" id="job-log" hidden></pre>
 </div>
 
 <div class="panel" id="unit-panel" hidden>
   <h2>Unit report</h2>
-  <p class="note">How each parameter code was handled when combining values inside its group.</p>
+  <p class="note">
+    How each parameter code was handled when its values were combined inside its
+    group. Anything marked <strong>excluded</strong> contributed nothing to that
+    group's daily values; anything marked <strong>assumed</strong> was used
+    without a declared unit and is worth checking.
+  </p>
   <div class="table-wrap">
-    <table class="unit-report" id="unit-table"><thead>
-      <tr><th>Group</th><th>Code</th><th>Action</th><th>Detail</th></tr>
-    </thead><tbody></tbody></table>
+    <table class="unit-report" id="unit-table">
+      <thead>
+        <tr><th>Group</th><th>Code</th><th>Action</th><th>Detail</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 </div>
 
 <div class="panel" id="ready-panel" hidden>
-  <h2>Dataset ready 🎉</h2>
-  <p class="note">Daily tables are built — medians and mutual information are computed on the fly in the explorer.</p>
-  <a class="btn primary" id="explore-link" href="#">Open in explorer →</a>
+  <h2>Dataset ready</h2>
+  <p class="note">
+    The daily tables are built. Medians and mutual information are computed on
+    demand in the explorer, so any date window or season you pick there returns
+    freshly derived numbers.
+  </p>
+  <div class="toolbar" style="margin-top:var(--sp-3);">
+    <a class="btn primary" id="explore-link" href="#">Open in explorer</a>
+  </div>
 </div>
 
 {{ bootstrap|json_script:"bootstrap" }}

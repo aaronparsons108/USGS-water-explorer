@@ -1,9 +1,10 @@
-"""USGS parameter-code catalog: load (live or snapshot), search, presets.
+"""USGS parameter-code catalog: loading, search, and the example preset.
 
-The picker UI searches this catalog. Live source is
+The picker searches this catalog. The live source is
 ``dataretrieval.waterdata.get_reference_table(collection="parameter-codes")``
-(the old ``nwis.get_pmcodes`` is defunct); a committed snapshot
-(``data/pmcode_catalog.csv``) keeps the picker working offline.
+(the old ``nwis.get_pmcodes`` is defunct). A committed snapshot at
+``data/pmcode_catalog.csv`` keeps the picker working offline, and a Parquet
+cache under ``.cache/`` makes repeat loads fast.
 """
 
 from __future__ import annotations
@@ -24,9 +25,9 @@ COLUMNS = [
     "parameter_description",
 ]
 
-# One-click preset matching the original nitro-research study. Streamflow is
-# canonical-only (the study required the literal 00060_Mean series); analyte
-# groups accept sensor-labeled variants, as the study did for nitrate.
+# One-click preset matching the original nitrate study. Streamflow is
+# canonical-only, because the study required the literal 00060_Mean series;
+# the analyte groups accept sensor-labeled variants, as the study did.
 EXAMPLE_GROUPS = [
     {
         "label": "Nitrate/Nitrite",
@@ -58,13 +59,13 @@ ALL_STATES = CONUS_STATES + ["AK", "HI", "DC", "PR"]
 
 # data_type_cd values seen in NWIS series catalogs. Only dv is downloadable.
 SERVICE_CHOICES = [
-    ("dv", "Daily values (dv) — downloadable"),
-    ("uv", "Instantaneous (uv) — filter only"),
-    ("qw", "Water-quality samples (qw) — filter only (endpoint retired)"),
-    ("gw", "Groundwater levels (gw) — filter only"),
-    ("ad", "Annual data (ad) — filter only"),
-    ("pk", "Peaks (pk) — filter only"),
-    ("sv", "Site visits (sv) — filter only"),
+    ("dv", "Daily values (dv), downloadable"),
+    ("uv", "Instantaneous (uv), filter only"),
+    ("qw", "Water-quality samples (qw), filter only, endpoint retired"),
+    ("gw", "Groundwater levels (gw), filter only"),
+    ("ad", "Annual data (ad), filter only"),
+    ("pk", "Peaks (pk), filter only"),
+    ("sv", "Site visits (sv), filter only"),
 ]
 
 
@@ -87,14 +88,21 @@ def refresh_catalog_from_nwis() -> pd.DataFrame:
 
 @lru_cache(maxsize=1)
 def load_catalog() -> pd.DataFrame:
-    """Parquet cache -> committed snapshot -> live fetch, first hit wins."""
+    """Parquet cache, then committed snapshot, then live fetch. First hit wins.
+
+    A corrupt Parquet cache falls through to the snapshot rather than taking
+    the picker down; the cache is a speed-up, never the only copy.
+    """
     cache = Path(settings.CACHE_DIR) / CACHE_NAME
     if cache.is_file():
-        return pd.read_parquet(cache)
+        try:
+            return pd.read_parquet(cache)
+        except Exception:
+            pass
     snap = _snapshot_path()
     if snap.is_file():
         df = pd.read_csv(snap, dtype={"parameter_code": str})
-        df["parameter_code"] = df["parameter_code"].str.zfill(5)
+        df["parameter_code"] = df["parameter_code"].astype(str).str.zfill(5)
         return df
     return refresh_catalog_from_nwis()
 
@@ -105,13 +113,27 @@ def search_pmcodes(q: str, limit: int = 25) -> list[dict]:
     if not q:
         return []
     df = load_catalog()
+
+    def col(name: str) -> pd.Series:
+        """A column as lowercase text, or blanks if this snapshot lacks it.
+
+        Read-only on purpose: ``load_catalog`` is memoized, and adding a column
+        here would mutate the frame every later caller shares.
+        """
+        if name not in df.columns:
+            return pd.Series("", index=df.index)
+        return df[name].astype(str).str.lower()
+
     ql = q.lower()
     if q.isdigit():
-        hits = df[df["parameter_code"].str.startswith(q)]
+        hits = df[df["parameter_code"].astype(str).str.startswith(q)]
     else:
-        name = df["parameter_name"].astype(str).str.lower()
-        desc = df["parameter_description"].astype(str).str.lower()
-        hits = df[name.str.contains(ql, na=False) | desc.str.contains(ql, na=False)]
+        name = col("parameter_name")
+        desc = col("parameter_description")
+        hits = df[
+            name.str.contains(ql, na=False, regex=False)
+            | desc.str.contains(ql, na=False, regex=False)
+        ]
     out = []
     for _, r in hits.head(limit).iterrows():
         out.append(
@@ -127,8 +149,13 @@ def search_pmcodes(q: str, limit: int = 25) -> list[dict]:
 
 
 def pmcode_info(codes: list[str]) -> list[dict]:
-    """Full picker dicts for known codes (used by the example preset)."""
-    df = load_catalog().set_index("parameter_code")
+    """Picker dicts for known codes, used by the example preset.
+
+    Duplicate parameter codes do occur in the reference table, so the first row
+    wins rather than ``.loc`` handing back a DataFrame that ``.get`` would
+    silently turn into a Series of values.
+    """
+    df = load_catalog().drop_duplicates(subset=["parameter_code"]).set_index("parameter_code")
     out = []
     for c in codes:
         c = str(c).zfill(5)

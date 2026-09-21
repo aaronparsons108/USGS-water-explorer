@@ -9,6 +9,5 @@ urlpatterns = [
     path("<slug:slug>/", views.index, name="index"),
     path("<slug:slug>/results/", views.results, name="results"),
     path("<slug:slug>/download/<str:kind>.png", views.download_png, name="download_png"),
-    path("<slug:slug>/research/<str:kind>.png", views.research_png, name="research_png"),
     path("<slug:slug>/download/sites.csv", views.download_csv, name="download_csv"),
 ]

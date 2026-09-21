@@ -1,6 +1,7 @@
 "use strict";
 
-/* Step 1: dataset setup — groups builder with parameter-code picker. */
+/* Step 1: dataset setup. Scope fields, the parameter-group builder with its
+   code picker, service filters, and the state selector. */
 
 const B = JSON.parse(document.getElementById("bootstrap").textContent);
 let groups = B.groups.map((g) => ({
@@ -38,7 +39,7 @@ function stateBoxes() { return [...statesDiv.querySelectorAll("input")]; }
 function updateStatesCount() {
   const n = stateBoxes().filter((b) => b.checked).length;
   document.getElementById("states-count").textContent =
-    n === 0 ? "none selected — pick at least one" : `${n} selected`;
+    n === 0 ? "None selected: pick at least one state" : `${n} state${n === 1 ? "" : "s"} selected`;
 }
 statesDiv.addEventListener("change", updateStatesCount);
 document.getElementById("states-conus").onclick = () => {
@@ -54,10 +55,16 @@ updateStatesCount();
 /* --- groups builder --- */
 const groupsDiv = document.getElementById("groups");
 
+function esc(v) {
+  return String(v === null || v === undefined ? "" : v).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 function chipHTML(p, gi, pi) {
-  const unit = p.unit ? `<span class="unit">${p.unit}</span>` : "";
-  return `<span class="chip"><strong>${p.code}</strong> ${p.name || ""} ${unit}
-    <button type="button" data-g="${gi}" data-p="${pi}" title="remove">×</button></span>`;
+  const unit = p.unit ? `<span class="unit">${esc(p.unit)}</span>` : "";
+  return `<span class="chip"><strong>${esc(p.code)}</strong> ${esc(p.name || "")} ${unit}
+    <button type="button" data-g="${gi}" data-p="${pi}" aria-label="Remove ${esc(p.code)}" title="Remove">&times;</button></span>`;
 }
 
 function renderGroups() {
@@ -68,18 +75,18 @@ function renderGroups() {
     box.innerHTML = `
       <div class="group-head">
         <strong>Group ${gi + 1}</strong>
-        <input type="text" value="${g.label.replace(/"/g, "&quot;")}" data-g="${gi}" class="g-label" placeholder="Label (e.g. Nitrate/Nitrite)">
+        <input type="text" value="${esc(g.label)}" data-g="${gi}" class="g-label" placeholder="Label, e.g. Nitrate/Nitrite">
         ${groups.length > B.min_groups ? `<button type="button" class="btn danger g-remove" data-g="${gi}">Remove</button>` : ""}
       </div>
-      <div class="g-chips">${g.pmcodes.map((p, pi) => chipHTML(p, gi, pi)).join("") || '<span class="note">No parameter codes yet.</span>'}</div>
+      <div class="g-chips">${g.pmcodes.map((p, pi) => chipHTML(p, gi, pi)).join("") || '<span class="note">No parameter codes yet. Search below to add one.</span>'}</div>
       <div class="pm-search">
-        <input type="text" class="pm-input" data-g="${gi}" placeholder="Search parameter codes (e.g. 00060 or nitrate)…" autocomplete="off">
+        <input type="text" class="pm-input" data-g="${gi}" placeholder="Search parameter codes, e.g. 00060 or nitrate" autocomplete="off">
         <div class="pm-results" hidden></div>
       </div>
       <label class="inline g-canonical-label">
         <input type="checkbox" class="g-canonical" data-g="${gi}" ${g.require_canonical ? "checked" : ""}>
         Primary series only
-        <span class="note">&mdash; ignore specially-labeled extras like &ldquo;index velocity&rdquo;, &ldquo;dam tailwater&rdquo;, &ldquo;suna sensor&rdquo;</span>
+        <span class="note">ignores labeled extras such as "index velocity", "dam tailwater" or "suna sensor"</span>
       </label>`;
     groupsDiv.appendChild(box);
   });
@@ -127,9 +134,9 @@ function searchPmcodes(input) {
       const have = new Set(groups[gi].pmcodes.map((p) => p.code));
       resultsDiv.innerHTML = data.results
         .filter((r) => !have.has(r.code))
-        .map((r) => `<div data-code="${r.code}" data-name="${(r.name || "").replace(/"/g, "&quot;")}" data-unit="${(r.unit || "").replace(/"/g, "&quot;")}">
-              <span class="code">${r.code}</span> ${r.name} <span class="unit">(${r.unit || "no unit"})</span><br>
-              <span class="unit">${r.description || ""}</span></div>`)
+        .map((r) => `<div data-code="${esc(r.code)}" data-name="${esc(r.name)}" data-unit="${esc(r.unit)}">
+              <span class="code">${esc(r.code)}</span> ${esc(r.name)} <span class="unit">(${esc(r.unit) || "no declared unit"})</span><br>
+              <span class="unit">${esc(r.description)}</span></div>`)
         .join("") || '<div class="note" style="padding:8px;">No matches.</div>';
       resultsDiv.hidden = false;
       resultsDiv.onclick = (ev) => {
@@ -139,7 +146,7 @@ function searchPmcodes(input) {
         renderGroups();
       };
     } catch (err) {
-      resultsDiv.innerHTML = `<div class="note" style="padding:8px;">Search failed: ${err.message}</div>`;
+      resultsDiv.innerHTML = `<div class="note" style="padding:8px;">Search failed: ${esc(err.message)}</div>`;
       resultsDiv.hidden = false;
     }
   }, 250);
@@ -180,11 +187,26 @@ document.getElementById("load-example").onclick = async () => {
 renderGroups();
 
 /* --- save --- */
+/* Warn once, at save time, about a group whose codes declare more than one
+   unit. It is legal (the builder will convert or exclude), but it is the kind
+   of thing a researcher wants to know before a long download, not after. */
+function mixedUnitGroups() {
+  return groups
+    .filter((g) => new Set(g.pmcodes.map((p) => (p.unit || "").trim().toLowerCase()).filter(Boolean)).size > 1)
+    .map((g) => g.label);
+}
+
 document.getElementById("save-btn").onclick = async () => {
   clearError();
   const states = stateBoxes().filter((b) => b.checked).map((b) => b.value);
   if (states.length === 0) { showError("Pick at least one state (or All CONUS)."); return; }
   const services = [...servicesDiv.querySelectorAll("input")].filter((b) => b.checked).map((b) => b.value);
+  const mixed = mixedUnitGroups();
+  if (mixed.length && !window.confirm(
+    `These groups mix units across their codes: ${mixed.join(", ")}.\n\n` +
+    "Values will be normalized to each group's most common unit, and any code " +
+    "that cannot be converted is excluded and listed in the unit report.\n\nContinue?"
+  )) return;
   const payload = {
     name: document.getElementById("ds-name").value,
     start_date: document.getElementById("ds-start").value,

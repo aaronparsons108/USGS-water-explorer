@@ -1,10 +1,16 @@
 """Recompute per-site medians and mutual information over a date/season slice.
 
-The MI estimator is a faithful port of
-``nitro/bubble_map_mutual_information.py::mutual_information_flow_no3`` (sklearn
-k-NN ``mutual_info_regression``, values in nats). Medians and counts mirror the
-research1 ``collect_*`` aggregations, just computed on an in-memory slice of the
-cached daily tables instead of re-reading the raw CSVs.
+Two dependence measures are produced for every pair of parameter groups:
+
+* ``mi_g<i>_g<j>``  raw mutual information in nats, from scikit-learn's k-NN
+  ``mutual_info_regression``. Unbounded above, and not numerically symmetric,
+  which is why the pairing rules can pin which group is passed as X.
+* ``nmi_g<i>_g<j>`` the binned uncertainty coefficient I(A;B)/H(A), bounded in
+  [0, 1] and therefore comparable across sites and pairs.
+
+Medians and counts are plain aggregations over the same slice. Everything is
+computed in memory from the cached daily tables, so a date or season change
+costs a groupby, not a re-read of the raw CSVs.
 """
 
 from __future__ import annotations
@@ -19,11 +25,11 @@ except ImportError as e:  # pragma: no cover
         "explorer metrics require scikit-learn (pip install scikit-learn)"
     ) from e
 
-from .research.normalized_mi import normalized_mi as _binned_normalized_mi
+from .normalized_mi import normalized_mi as _binned_normalized_mi
 
 DEFAULT_MIN_PAIRED_DAYS = 30
 
-# Output column names (match merged_site_data.csv + DO CSVs where they overlap).
+# Legacy column names, kept so the demo fallback CSVs still line up.
 MEDIAN_FLOW_COL = "median_00060_Mean"
 MEDIAN_NO3_COL = "median_no3no2"
 MEDIAN_DO_COL = "median_do_mg_l"
@@ -148,12 +154,17 @@ def compute_group_metrics(
     Output columns: median_g<pos>, n_g<pos> per group; mi_g<i>_g<j>,
     n_paired_g<i>_g<j> for every pair (i < j).
 
-    ``pairing_gates`` maps "i,j" to a rule dict (an int is shorthand for
-    {"gate": int}): "gate" restricts group i's days to those also paired with
-    the gate group before pairing with j (research1 paired DO against the
-    flow-gated NO3 series); "x" picks which group's series is passed as the
-    estimator's X (sklearn's kNN MI is not numerically symmetric — research1
-    used flow as X for the flow/NO3 pair). New datasets use no rules.
+    ``pairing_gates`` maps "i,j" to a rule dict (a bare int is shorthand for
+    {"gate": int}):
+
+    * "gate" restricts group i's days to those also paired with the gate group
+      before pairing with j. The original study paired DO against the
+      flow-gated NO3 series, and reproducing that is what keeps the demo's
+      numbers identical to the published ones.
+    * "x" picks which group's series is passed as the estimator's X, because
+      scikit-learn's k-NN MI is not numerically symmetric.
+
+    Datasets created through the wizard use no rules at all.
     """
     from itertools import combinations
 

@@ -1,27 +1,26 @@
-"""Binned (histogram) mutual information + Shannon entropy, and normalized MI.
+"""Binned (histogram) mutual information, Shannon entropy, and normalized MI.
 
-Peishi's normalized quantity is the *uncertainty coefficient*
+The normalized quantity is the *uncertainty coefficient*
 
-    U(N | Y) = I(N; Y) / H(N)
+    U(A | B) = I(A; B) / H(A)
 
-read as "the fraction of nitrate's uncertainty explained by Y". To keep the
-ratio bounded in [0, 1] we estimate **both** the numerator I(N;Y) and the
-denominator H(N) from histograms (Shannon, nats) with a single, self-consistent
-binning rule (Freedman-Diaconis). This is distinct from the k-NN
-``mutual_info_regression`` used for the raw-MI figures (which is unbounded).
+read as "the fraction of A's uncertainty explained by B". To keep the ratio
+bounded in [0, 1], both the numerator I(A;B) and the denominator H(A) are
+estimated from histograms (Shannon, nats) under a single self-consistent
+binning rule (Freedman-Diaconis). This is deliberately distinct from the k-NN
+``mutual_info_regression`` estimator used for the raw MI columns, which is
+unbounded and reported in nats without normalization.
 
-Everything here is data-source agnostic (plain arrays / a paired-daily
-DataFrame), so the same functions back both the nitro-research scripts and, later,
-usgs-water-explorer.
+Plain arrays in, plain floats out: nothing here knows about Django or the
+dataset schema.
 """
 
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 
-# Minimum paired daily observations to report a value (matches the raw-MI floor
-# in nitro.bubble_map_mutual_information.DEFAULT_MIN_PAIRED_DAYS).
+# Minimum paired daily observations before a value is reported (matches the
+# raw-MI floor used by explorer.core.metrics).
 MIN_PAIRED_DAYS = 30
 
 # Guard rails on the Freedman-Diaconis bin count.
@@ -101,7 +100,7 @@ def hist_mi(x, y) -> float:
 def normalized_mi(x, y, *, min_paired_days: int = MIN_PAIRED_DAYS) -> tuple[float, float, float]:
     """Return (I(x;y), H(x), U) with U = I/H clipped to [0, 1].
 
-    ``x`` is the reference variable (nitrate) whose entropy normalizes the MI.
+    ``x`` is the reference variable whose entropy normalizes the MI.
     Returns NaNs when fewer than ``min_paired_days`` finite pairs or H(x) ~ 0.
     """
     a = np.asarray(x, dtype=float)
@@ -115,28 +114,3 @@ def normalized_mi(x, y, *, min_paired_days: int = MIN_PAIRED_DAYS) -> tuple[floa
     if not np.isfinite(h) or h <= 1e-12 or not np.isfinite(i):
         return i, h, float("nan")
     return i, h, float(np.clip(i / h, 0.0, 1.0))
-
-
-def per_site_normalized_mi(
-    daily: pd.DataFrame,
-    x_col: str,
-    y_col: str,
-    *,
-    min_paired_days: int = MIN_PAIRED_DAYS,
-) -> pd.DataFrame:
-    """Per-site binned MI / entropy / normalized MI over paired daily values.
-
-    ``daily`` has columns ``site_no``, ``x_col`` (nitrate), ``y_col``. Returns one
-    row per site: ``site_no, i_bin, h_bin, u_bin, n_paired``.
-    """
-    rows = []
-    for site_no, sub in daily.groupby("site_no"):
-        pair = sub[[x_col, y_col]].apply(pd.to_numeric, errors="coerce").dropna()
-        n = len(pair)
-        i, h, u = normalized_mi(
-            pair[x_col].to_numpy(), pair[y_col].to_numpy(), min_paired_days=min_paired_days
-        )
-        rows.append(
-            {"site_no": str(site_no), "i_bin": i, "h_bin": h, "u_bin": u, "n_paired": n}
-        )
-    return pd.DataFrame(rows)

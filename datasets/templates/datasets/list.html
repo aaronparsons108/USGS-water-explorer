@@ -1,25 +1,39 @@
 {% extends "datasets/base.html" %}
-{% block title %}Datasets — USGS Site Explorer{% endblock %}
+{% block title %}Datasets :: USGS Site Explorer{% endblock %}
+{% block page_class %}page-wide{% endblock %}
 
 {% block content %}
-<div class="sites-toolbar">
-  <h2 style="margin:0;font-size:17px;">Datasets</h2>
-  <div class="spacer"></div>
-  <form method="post" action="{% url 'datasets:create' %}">
-    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-    <button type="submit" class="btn primary">+ New extraction</button>
-  </form>
-</div>
+{% if seed_error %}<div class="error-box">{{ seed_error }}</div>{% endif %}
+
+<section class="panel" aria-labelledby="hd-datasets">
+  <div class="panel-head">
+    <div>
+      <h2 id="hd-datasets">Your extractions</h2>
+      <p class="note">
+        An extraction is a saved set of parameter groups, discovered sites, and
+        downloaded daily values. Open one to explore it, or start a new one.
+      </p>
+    </div>
+    <form method="post" action="{% url 'datasets:create' %}">
+      <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+      <button type="submit" class="btn primary">New extraction</button>
+    </form>
+  </div>
+</section>
 
 <div class="cards">
   {% for c in cards %}
-  <div class="ds-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
+  <article class="ds-card">
+    <div class="ds-card-head">
       <h3>{{ c.name }}</h3>
       <span class="status-pill status-{{ c.status }}">{{ c.status_label }}</span>
     </div>
     <div class="group-chips">
-      {% for g in c.groups %}<span class="chip">{{ g.label }} <span class="unit">{{ g.n_codes }} code{{ g.n_codes|pluralize }}</span></span>{% endfor %}
+      {% for g in c.groups %}
+        <span class="chip">{{ g.label }} <span class="unit">{{ g.n_codes }} code{{ g.n_codes|pluralize }}</span></span>
+      {% empty %}
+        <span class="note">No parameter groups configured yet.</span>
+      {% endfor %}
     </div>
     <div class="meta">
       {{ c.n_selected }} of {{ c.n_sites }} sites selected &middot; created {{ c.created }}
@@ -43,15 +57,26 @@
           <a class="btn" href="{% url 'datasets:setup' c.id %}">Edit</a>
         {% endif %}
         <form method="post" action="{% url 'datasets:delete' c.id %}"
-              onsubmit="return confirm('Delete dataset “{{ c.name }}” and its downloaded data?');">
+              onsubmit="return confirm('Delete the dataset &quot;{{ c.name|escapejs }}&quot; and everything it downloaded?');">
           <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
           <button type="submit" class="btn danger">Delete</button>
         </form>
       {% endif %}
     </div>
-  </div>
+  </article>
   {% empty %}
-  <p class="note">No datasets yet — create one to start extracting USGS data.</p>
+  <div class="panel empty-state">
+    <h3>No datasets yet</h3>
+    <p class="note">
+      Create an extraction to pick your parameter codes, discover the USGS sites
+      that carry all of them, and download daily values. Everything you need for
+      a correlation study lives in one place after that.
+    </p>
+    <form method="post" action="{% url 'datasets:create' %}">
+      <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+      <button type="submit" class="btn primary">Start your first extraction</button>
+    </form>
+  </div>
   {% endfor %}
 </div>
 {% endblock %}
