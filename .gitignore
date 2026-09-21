@@ -14,8 +14,13 @@ env/
 db.sqlite3
 db.sqlite3-journal
 
-# Parsed daily-value caches (rebuild with: python manage.py build_cache)
-.cache/
+# Parsed daily-value caches (rebuild with: python manage.py build_cache).
+# The three demo daily tables ARE committed (5.4 MB) so a fresh clone gets
+# working date/season recompute; everything else here is regenerated.
+.cache/*
+!.cache/daily_do.parquet
+!.cache/daily_flow.parquet
+!.cache/daily_no3.parquet
 
 # Per-dataset downloads + daily tables (user data; recreate via the wizard)
 datasets_store/
