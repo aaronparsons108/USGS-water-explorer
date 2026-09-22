@@ -22,8 +22,13 @@ _JOIN = "_site_key"
 
 def data_mode(dataset) -> dict:
     """Which data backend is available for this dataset right now."""
+    # Tables are only trustworthy once the download step has finished for the
+    # configuration currently on the dataset. While it is a draft or mid-build,
+    # anything on disk describes an older set of groups, so recompute is
+    # refused rather than served under labels it was not built with.
+    settled = dataset.is_demo or dataset.status == dataset.STATUS_READY
     return {
-        "recompute_enabled": cache.dataset_daily_available(dataset),
+        "recompute_enabled": settled and cache.dataset_daily_available(dataset),
         "is_demo": dataset.is_demo,
     }
 

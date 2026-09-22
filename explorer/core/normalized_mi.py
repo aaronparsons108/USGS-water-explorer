@@ -11,6 +11,20 @@ binning rule (Freedman-Diaconis). This is deliberately distinct from the k-NN
 ``mutual_info_regression`` estimator used for the raw MI columns, which is
 unbounded and reported in nats without normalization.
 
+Known bias, measured on the 169 demo sites (2026-09-22). This estimator does
+not return 0 for independent series: shuffling the second series and
+recomputing gives a mean U of 0.081 against a mean reported U of 0.223, so
+roughly a third of a typical value is estimator bias rather than dependence.
+The bias grows as the record shortens (Spearman -0.72 between the shuffled
+value and paired days), which means a map coloured by U is partly a map of
+record length, and a seasonal slice inflates it further. Treat a value as an
+upper bound, and compare only sites with records of similar length.
+
+Correcting it means subtracting a permutation baseline (U minus the mean of
+about 20 shuffles, reported with a p-value), or switching to equiprobable bins
+with a fixed count per axis plus a Miller-Madow correction. Either change moves
+published numbers, so it is a methods decision rather than a refactor.
+
 Plain arrays in, plain floats out: nothing here knows about Django or the
 dataset schema.
 """

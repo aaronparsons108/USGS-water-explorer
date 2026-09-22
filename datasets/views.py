@@ -236,6 +236,20 @@ def setup_save(request, pk: int):
         ds.groups.all().delete()
         for i, g in enumerate(clean["groups"], start=1):
             ParameterGroup.objects.create(dataset=ds, position=i, **g)
+
+    # The daily tables on disk were built for the groups that were just
+    # replaced, and nothing in them records which groups that was. Left in
+    # place, the explorer kept serving those numbers under the new labels:
+    # swap two groups and the streamflow median appears as the nitrate one.
+    # Deleting them puts the dataset back to "no daily tables yet", which the
+    # explorer already explains and the download step already fixes.
+    from explorer.core import cache as explorer_cache
+
+    for path in sorted(ds.store_dir.glob("daily_g*.parquet")):
+        path.unlink(missing_ok=True)
+    ds.unit_report = []
+    ds.save(update_fields=["unit_report"])
+    explorer_cache.clear_memo()
     return JsonResponse({"ok": True})
 
 

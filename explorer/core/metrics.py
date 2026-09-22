@@ -6,7 +6,9 @@ Two dependence measures are produced for every pair of parameter groups:
   ``mutual_info_regression``. Unbounded above, and not numerically symmetric,
   which is why the pairing rules can pin which group is passed as X.
 * ``nmi_g<i>_g<j>`` the binned uncertainty coefficient I(A;B)/H(A), bounded in
-  [0, 1] and therefore comparable across sites and pairs.
+  [0, 1]. Bounded is not unbiased: see the bias note in ``normalized_mi``.
+  These values are not comparable across sites with very different record
+  lengths.
 
 Medians and counts are plain aggregations over the same slice. Everything is
 computed in memory from the cached daily tables, so a date or season change

@@ -73,6 +73,16 @@ questions:
   that B explains". Both numerator and denominator use one self-consistent
   Freedman-Diaconis histogram, which is what keeps the ratio in range.
 
+  **Known bias.** Bounded is not unbiased. Shuffling one series at each demo
+  site destroys any real dependence, yet this estimator still returns a mean
+  normalized MI of 0.081, against a mean reported value of 0.223. The shuffled
+  value rises as the record shortens (Spearman -0.72 against paired days), so a
+  map coloured by normalized MI is partly a map of record length, and a
+  seasonal slice inflates it further. Read these values as upper bounds, and
+  compare only sites with records of similar length. Raw MI passes the same
+  test (shuffled mean 0.009 nats). See `explorer/core/normalized_mi.py` for the
+  two candidate corrections.
+
 Any metric can drive the map color or either scatter axis.
 
 Notes:

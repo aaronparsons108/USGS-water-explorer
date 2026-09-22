@@ -18,7 +18,7 @@ from pathlib import Path
 import pandas as pd
 from django.conf import settings
 
-from .conversions import normalize_usgs_site_no
+from .conversions import normalize_usgs_site_no, display_usgs_site_no
 from .regions import site_location_type_label
 from .metrics import (
     MEDIAN_FLOW_COL,
@@ -69,7 +69,11 @@ def _read_csv(name: str) -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.read_csv(path, dtype={"site_no": str})
     if "site_no" in df.columns:
-        df["site_no"] = df["site_no"].map(normalize_usgs_site_no).astype(str)
+        # Show the id USGS uses. Normalizing here stripped the leading zeros
+        # off every demo site, so the table and the CSV disagreed with the
+        # wizard datasets about the same site and neither id pasted into the
+        # USGS site page. Joins build their own key in service.py.
+        df["site_no"] = df["site_no"].map(display_usgs_site_no).astype(str)
     return df
 
 

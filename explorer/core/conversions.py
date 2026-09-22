@@ -45,6 +45,26 @@ def normalize_usgs_site_no(x) -> str:
     return stripped if stripped else "0"
 
 
+def display_usgs_site_no(x) -> str:
+    """The site id as USGS writes it, for anything a reader will copy.
+
+    The study CSV exports went through a spreadsheet, which read the ids as
+    numbers and dropped their leading zeros, so 01408500 arrives as 1408500
+    and fails when pasted into the USGS site page. Surface-water ids are eight
+    digits; pad digit-only ids back to that width. Longer ids (wells are
+    fifteen) and anything containing a letter are left exactly as given.
+
+    This is the display counterpart of ``normalize_usgs_site_no``: that one
+    strips zeros to build a join key, this one restores them for the reader.
+    """
+    s = str(x).strip()
+    if s.endswith(".0") and s[:-2].isdigit():
+        s = s[:-2]
+    if not s.isdigit():
+        return s
+    return s.zfill(8)
+
+
 def pm_mean_columns(cols: list[str], pmcode: str) -> list[str]:
     """NO3+NO2 daily Mean columns for a given parameter code (excludes flow / _cd)."""
     return [

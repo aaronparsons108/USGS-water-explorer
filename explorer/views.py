@@ -137,7 +137,10 @@ def index(request, slug: str | None = None):
         {
             "key": GROUP_NMI,
             "title": "Normalized MI",
-            "hint": "I(A;B)/H(A), bounded 0 to 1 and comparable across sites.",
+            "hint": (
+                "I(A;B)/H(A), bounded 0 to 1. Biased upward, and more so on "
+                "short records, so compare sites of similar length."
+            ),
             "rows": form.range_rows(form.nmi_cols),
         },
         {
