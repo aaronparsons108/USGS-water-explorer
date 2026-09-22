@@ -90,9 +90,12 @@ GEO_PAD_FRAC = 0.16
 # Roughly what the albers-usa basemap spans at zoom 1, in degrees.
 GEO_BASE_LON_SPAN = 58.0
 GEO_BASE_LAT_SPAN = 26.0
-# Below this the insets stay on screen; above it a lone site fills the frame
-# with featureless land.
-GEO_MIN_ZOOM = 1.3
+# Below this the Hawaii inset stays on screen; above it a lone site fills the
+# frame with featureless land. A nation-wide extraction centres further west
+# and can still catch a sliver of the insets: removing them entirely would
+# mean dropping scope="usa" and drawing state boundaries from a bundled
+# GeoJSON instead, since scope is the only thing that supplies them.
+GEO_MIN_ZOOM = 1.45
 GEO_MAX_ZOOM = 6.0
 # Sites outside this box (Alaska, Hawaii, territories) need the insets, so
 # framing is left alone when any site falls outside it.
